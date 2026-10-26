@@ -43,7 +43,7 @@ describe("study priorities", () => {
 
 	it("asks for more data when only a few questions have been answered", () => {
 		const [entry] = priorities([scored("a", "short", 3, 0, 2), scored("b", "short", 1, 0, 2)]);
-		expect(entry).toMatchObject({ status: "not-enough-evidence", reasons: ["Only 4 answers recorded"] });
+		expect(entry).toMatchObject({ status: "not-enough-evidence", reasons: [] });
 	});
 
 	it("counts every answered copy of a repeated question as evidence", () => {
@@ -64,7 +64,7 @@ describe("study priorities", () => {
 		const skipped = (id: string, days: number) =>
 			attemptOf(id, "skips", days, [item("a", "correct"), item("b", "unanswered"), item("c", "unknown"), item("d", "correct")]);
 		const [entry] = priorities([skipped("a", 3), skipped("b", 1)]);
-		expect(entry).toMatchObject({ questionsAnswered: 4, status: "not-enough-evidence", reasons: ["Only 4 answers recorded"] });
+		expect(entry).toMatchObject({ questionsAnswered: 4, status: "not-enough-evidence", reasons: [] });
 	});
 
 	it("flags exams that stay below the passing grade", () => {
@@ -184,12 +184,14 @@ describe("continue studying", () => {
 
 	it("asks for more data instead of judging a single attempt", () => {
 		const result = recommend([scored("a", "new", 1, 10, 10)]);
-		expect(result).toMatchObject({ heading: "Build up more practice data", actions: ["retry-exam"], examId: "new" });
+		expect(result).toMatchObject({ heading: "Practice some more!", actions: ["retry-exam"], examId: "new" });
+		expect(result?.detail).toBe("new does not have enough data to analyze trends");
 	});
 
 	it("suggests a refresher when results are consistently strong", () => {
 		const result = recommend([scored("a", "good", 30, 10, 10), scored("b", "good", 20, 10, 10)]);
-		expect(result).toMatchObject({ heading: "Keep your results fresh", actions: ["retry-exam"], examId: "good" });
+		expect(result).toMatchObject({ heading: "Outstanding", actions: ["retry-exam"], examId: "good" });
+		expect(result?.detail).toBe("Your recent results on good were extraordinary");
 	});
 
 	it("changes as new attempts are recorded", () => {

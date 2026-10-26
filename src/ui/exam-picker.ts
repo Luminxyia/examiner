@@ -24,7 +24,7 @@ export class ExamPickerModal extends FuzzySuggestModal<ExamDefinition> {
 		el.createDiv({ text: match.item.title || "Untitled exam" });
 		const count = match.item.questions.reduce((sum, ref) => sum + ref.count, 0);
 		const time = match.item.timeLimitMinutes === null ? "untimed" : formatTimeLimit(match.item.timeLimitMinutes);
-		el.createDiv({ cls: "examiner-row-meta", text: `${count === 1 ? "1 question" : `${count} questions`} · ${time}` });
+		el.createDiv({ cls: "examiner-row-meta", text: `${count === 1 ? "1 question" : `${count} questions`}, ${time}` });
 	}
 
 	override onChooseItem(exam: ExamDefinition): void {

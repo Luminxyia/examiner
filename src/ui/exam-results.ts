@@ -63,7 +63,7 @@ export async function renderExamResult(
 
 	const hero = root.createDiv({ cls: "examiner-result-hero" });
 	const top = hero.createDiv({ cls: "examiner-result-top" });
-	const title = [record.examTitle || "Untitled exam", header.attemptLabel].filter(Boolean).join(" · ");
+	const title = [record.examTitle || "Untitled exam", header.attemptLabel].filter(Boolean).join(" ");
 	top.createDiv({ cls: "examiner-eyebrow", text: title });
 	textButton(top, header.backLabel).addEventListener("click", header.onBack);
 	hero.createDiv({ cls: "examiner-score", text: formatPercent(summary.percent) });
@@ -73,7 +73,7 @@ export async function renderExamResult(
 	const details = [formatDateTime(record.submittedAt)];
 	if (record.activeMs !== undefined) details.push(formatDuration(record.activeMs));
 	if (record.timedOut) details.push("submitted automatically when time ran out");
-	hero.createDiv({ cls: "examiner-muted examiner-small", text: details.join(" · ") });
+	hero.createDiv({ cls: "examiner-muted examiner-small", text: details.join(", ") });
 	renderOutcomeBar(
 		hero,
 		OUTCOMES.filter((outcome) => outcome !== "partial" || counts.partial > 0).map((outcome) => ({ label: OUTCOME_LABELS[outcome], value: counts[outcome], tone: OUTCOME_TONES[outcome] })),
@@ -86,7 +86,7 @@ export async function renderExamResult(
 		(summary.byQuestion ?? []).map((group) => ({ ...group, label: group.label || "Untitled question" })),
 	);
 
-	const review = section(root, "Review", "select a question to see its details");
+	const review = section(root, "Review");
 	const list = review.createDiv({ cls: "examiner-review" });
 	for (const [index, item] of record.items.entries()) await renderReviewItem(app, component, list, item, index);
 }

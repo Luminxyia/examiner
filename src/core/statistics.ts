@@ -146,7 +146,7 @@ export function formatSignedPercent(value: number): string {
 
 export function describeChange(trend: Extract<ScoreTrend, { kind: "change" }>, rose: string, fell: string): string {
 	const verb = trend.points >= 0 ? rose : fell;
-	return trend.relative === null ? `${verb} from 0%` : `${verb} (${formatSignedPercent(trend.relative)})`;
+	return `${verb} (${formatSignedPercent(trend.relative ?? Math.round(trend.points))})`;
 }
 
 export interface ExamGroup {

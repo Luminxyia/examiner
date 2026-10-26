@@ -1917,12 +1917,13 @@ button.examiner-show-more {
 	display: flex;
 	flex-wrap: wrap;
 	align-items: center;
+	justify-content: flex-end;
 	gap: var(--size-2-3) var(--size-4-3);
 	margin-top: var(--size-2-1);
 }
 
 .examiner-priority-advice {
-	flex: 1 1 12rem;
+	flex: 0 1 auto;
 	min-width: 0;
 }
 

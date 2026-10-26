@@ -1,58 +1,20 @@
 import { describe, expect, it } from "vitest";
-import { easeOutCubic, monotonePath, sampleSeries, type Point } from "../src/core/curve";
+import { easeOutCubic, linePath, sampleSeries } from "../src/core/curve";
 
-function segments(path: string): number[][] {
-	return [...path.matchAll(/C([^C]+)/g)].map((match) => (match[1] ?? "").trim().split(/[ ,]+/).map(Number));
-}
-
-describe("monotonePath", () => {
-	it("handles no points, one point and two points", () => {
-		expect(monotonePath([])).toBe("");
-		expect(monotonePath([{ x: 10, y: 20 }])).toBe("M10,20");
-		const two = monotonePath([
-			{ x: 0, y: 100 },
-			{ x: 30, y: 40 },
-		]);
-		expect(two.startsWith("M0,100")).toBe(true);
-		expect(two.endsWith("30,40")).toBe(true);
+describe("linePath", () => {
+	it("handles no points and one point", () => {
+		expect(linePath([])).toBe("");
+		expect(linePath([{ x: 10, y: 20 }])).toBe("M10,20");
 	});
 
-	it("passes exactly through every recorded point", () => {
-		const points: Point[] = [
+	it("joins every recorded point with straight segments", () => {
+		const path = linePath([
 			{ x: 0, y: 50 },
 			{ x: 10, y: 70 },
 			{ x: 20, y: 10 },
-			{ x: 30, y: 90 },
-		];
-		const path = monotonePath(points);
-		expect(path.startsWith("M0,50")).toBe(true);
-		const ends = segments(path).map((values) => [values[4], values[5]]);
-		expect(ends).toEqual([
-			[10, 70],
-			[20, 10],
-			[30, 90],
 		]);
-	});
-
-	it("never overshoots between points, even with sharp changes", () => {
-		const points: Point[] = [
-			{ x: 0, y: 200 },
-			{ x: 10, y: 200 },
-			{ x: 20, y: 0 },
-			{ x: 30, y: 10 },
-			{ x: 40, y: 200 },
-			{ x: 50, y: 195 },
-		];
-		segments(monotonePath(points)).forEach((values, index) => {
-			const a = points[index];
-			const b = points[index + 1];
-			const low = Math.min(a.y, b.y);
-			const high = Math.max(a.y, b.y);
-			for (const controlY of [values[1], values[3]]) {
-				expect(controlY).toBeGreaterThanOrEqual(low - 1e-9);
-				expect(controlY).toBeLessThanOrEqual(high + 1e-9);
-			}
-		});
+		expect(path).toBe("M0,50 L10,70 L20,10");
+		expect(path).not.toContain("C");
 	});
 });
 

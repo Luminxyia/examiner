@@ -79,7 +79,7 @@ describe("relative score changes", () => {
 		expect(relativeChange(0, 0)).toBeNull();
 		const trend = scoreTrend(attempt("b", "x", 2, 50), attempt("a", "x", 1, 0));
 		expect(trend).toEqual({ kind: "change", points: 50, relative: null });
-		if (trend.kind === "change") expect(describeChange(trend, "rose", "fell")).toBe("rose from 0%");
+		if (trend.kind === "change") expect(describeChange(trend, "rose", "fell")).toBe("rose (+50%)");
 	});
 
 	it("describes increases and decreases", () => {

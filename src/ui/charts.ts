@@ -1,5 +1,5 @@
 import { setTooltip } from "obsidian";
-import { easeOutCubic, monotonePath, sampleSeries } from "../core/curve";
+import { easeOutCubic, linePath, sampleSeries } from "../core/curve";
 import { addLocalDays, formatDuration, localDayKey, startOfLocalDay, type NumberedAttempt } from "../core/statistics";
 import { formatDateTime, formatMarks, formatPercent, formatScore, type Tone } from "./shared";
 
@@ -159,7 +159,7 @@ export class GradeChart {
 		const draw = (values: readonly number[]) => {
 			this.shown = [...values];
 			const coordinates = values.map((value, index) => ({ x: chartX(index, values.length), y: chartY(value) }));
-			const curve = monotonePath(coordinates);
+			const curve = linePath(coordinates);
 			const first = coordinates[0];
 			const last = coordinates[coordinates.length - 1];
 			const hasCurve = first !== undefined && last !== undefined && coordinates.length > 1;

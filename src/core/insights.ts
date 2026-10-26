@@ -214,11 +214,7 @@ export function studyPriorities(
 		let status: PriorityStatus;
 		if (group.attempts.length < MIN_ATTEMPTS_FOR_PRIORITY || questionsAnswered < MIN_QUESTIONS_FOR_PRIORITY) {
 			status = "not-enough-evidence";
-			reasons.push(
-				group.attempts.length < MIN_ATTEMPTS_FOR_PRIORITY
-					? `Based on ${plural(group.attempts.length, "attempt")}`
-					: `Only ${plural(questionsAnswered, "answer")} recorded`,
-			);
+			if (group.attempts.length < MIN_ATTEMPTS_FOR_PRIORITY) reasons.push(`Based on ${plural(group.attempts.length, "attempt")}`);
 		} else {
 			const strong = Math.max(STRONG_SCORE, passing + 20);
 			const belowPassing = latest.percent < passing && recentScore < passing;
@@ -381,8 +377,8 @@ export function recommendNext(priorities: readonly ExamPriority[], mistakes: rea
 	const thin = priorities.find((priority) => priority.status === "not-enough-evidence");
 	if (thin) {
 		return {
-			heading: "Build up more practice data",
-			detail: `${thin.title || "This exam"} has ${thin.attempts === 1 ? "only been attempted once" : "too few answers recorded"}, so it's too early to say how it's going.`,
+			heading: "Practice some more!",
+			detail: `${thin.title || "This exam"} does not have enough data to analyze trends`,
 			actions: ["retry-exam"],
 			examId: thin.examId,
 			mistakes: [],
@@ -392,8 +388,8 @@ export function recommendNext(priorities: readonly ExamPriority[], mistakes: rea
 	const stalest = [...priorities].sort((a, b) => Date.parse(a.latest.submittedAt) - Date.parse(b.latest.submittedAt))[0];
 	if (!stalest) return null;
 	return {
-		heading: "Keep your results fresh",
-		detail: `Your recent results on ${stalest.title || "this exam"} are strong. Retake it to check they hold.`,
+		heading: "Outstanding",
+		detail: `Your recent results on ${stalest.title || "this exam"} were extraordinary`,
 		actions: ["retry-exam"],
 		examId: stalest.examId,
 		mistakes: [],

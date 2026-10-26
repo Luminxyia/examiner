@@ -39,7 +39,7 @@ export class MistakeReviewModal extends Modal {
 
 		const details = [mistake.examTitle || "Untitled exam", describeMisses(mistake), `last on ${formatDateTime(mistake.lastMissedAt)}`];
 		if (mistake.correctSinceLastMiss) details.push("answered correctly since");
-		body.createDiv({ cls: "examiner-muted examiner-small", text: details.join(" · ") });
+		body.createDiv({ cls: "examiner-muted examiner-small", text: details.join(", ") });
 
 		await renderMarkdown(this.app, body.createDiv({ cls: "examiner-prompt" }), example.prompt, this.component);
 		if (token !== this.renderToken) return;

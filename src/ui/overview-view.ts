@@ -38,7 +38,7 @@ import { GradeChart, gradePoints, renderStudyHeatmap } from "./charts";
 import { GradeHistoryModal } from "./grade-history-modal";
 import { MistakeReviewModal } from "./mistake-review-modal";
 import { startExam } from "./start-exam";
-import { formatDateTime, formatPercent, formatRelativeTime, formatScore, renderEmptyState, section, textButton } from "./shared";
+import { formatDateTime, formatPercent, formatScore, renderEmptyState, section, textButton } from "./shared";
 
 export const VIEW_TYPE_OVERVIEW = "examiner-overview";
 
@@ -105,7 +105,7 @@ export class OverviewView extends ItemView {
 		const root = createDiv({ cls: "examiner-exams-body" });
 		const header = root.createDiv({ cls: "examiner-page-header" });
 		header.createEl("h2", { cls: "examiner-heading", text: "Study overview" });
-		textButton(header, "Exam Overview").addEventListener("click", () => void this.plugin.openExams());
+		textButton(header, "Go to exams").addEventListener("click", () => void this.plugin.openExams());
 
 		const now = new Date();
 		let overview: StudyOverview;
@@ -130,16 +130,15 @@ export class OverviewView extends ItemView {
 			this.renderEmpty(root);
 		} else {
 			this.renderToday(root, overview);
-			renderStudyHeatmap(section(root, "Focused study per day"), overview.daily, now);
 			const groups = groupAttemptsByExam(attempts, (examId) => this.plugin.exams.get(examId)?.title);
 			const mistakes = aggregateMistakes(records, now);
 			const priorities = studyPriorities(groups, records, (examId) => this.passingPercent(examId), now);
-			this.renderNextStep(root, recommendNext(priorities, mistakes, this.plugin.exams.definitions().length > 0));
-			this.renderPriorities(root, priorities, mistakes);
-
 			const columns = root.createDiv({ cls: "examiner-overview-columns" });
 			this.renderHistory(columns, groups);
 			this.renderGrades(columns, attempts);
+			this.renderNextStep(root, recommendNext(priorities, mistakes, this.plugin.exams.definitions().length > 0));
+			this.renderPriorities(root, priorities, mistakes);
+			renderStudyHeatmap(section(root, "Focused study per day"), overview.daily, now);
 			this.renderMistakes(root, mistakes);
 		}
 		this.contentEl.replaceChildren(root);
@@ -270,8 +269,7 @@ export class OverviewView extends ItemView {
 			const count = group.attempts.length;
 			main.createDiv({
 				cls: "examiner-row-meta",
-				text: `${count === 1 ? "1 attempt" : `${count} attempts`} · ${formatRelativeTime(group.latest.submittedAt)}`,
-				attr: { title: `Last attempt ${formatDateTime(group.latest.submittedAt)}` },
+				text: count === 1 ? "1 attempt" : `${count} attempts`,
 			});
 			const score = summary.createDiv({ cls: "examiner-row-score" });
 			score.createDiv({ cls: "examiner-row-score-value", text: formatPercent(group.latest.percent) });
@@ -317,23 +315,22 @@ export class OverviewView extends ItemView {
 		const item = parent.createDiv({ cls: "examiner-priority" });
 		const head = item.createDiv({ cls: "examiner-priority-head" });
 		head.createSpan({ cls: "examiner-row-title", text: priority.title || "Untitled exam" });
-		head.createSpan({ cls: "examiner-status-label", text: STATUS_LABELS[priority.status] });
+		item.createDiv({ cls: "examiner-status-label", text: STATUS_LABELS[priority.status] });
 
-		const facts = [`Latest attempt: ${formatPercent(priority.latest.percent)}`];
-		if (priority.previous && priority.trend.kind === "change") facts.push(`previous attempt: ${formatPercent(priority.previous.percent)}`);
-		item.createDiv({ cls: "examiner-row-meta", text: facts.join(" · ") });
-		if (priority.reasons.length > 0) item.createDiv({ cls: "examiner-row-meta", text: priority.reasons.join(" · ") });
+		item.createDiv({ cls: "examiner-row-meta", text: `Latest attempt: ${formatPercent(priority.latest.percent)}` });
+		for (const reason of priority.reasons) item.createDiv({ cls: "examiner-row-meta", text: reason });
 
 		const actionRow = item.createDiv({ cls: "examiner-priority-action" });
 		const exam = this.plugin.exams.get(priority.examId);
 		const unresolved = priority.mistakes.filter((mistake) => !mistake.correctSinceLastMiss);
 		const recommendation: Record<ExamPriority["action"], string> = {
 			"review-mistakes": "Review your latest mistakes.",
-			"practice-mistakes": "Retry the questions you answered incorrectly.",
+			"practice-mistakes": "",
 			"gather-evidence": "Take it again to build up enough evidence.",
-			"retry-exam": priority.status === "performing-well" ? "Retake it later to check the results hold." : "Retake the exam.",
+			"retry-exam": priority.status === "performing-well" ? "Retake it later to check the results hold." : "",
 		};
-		actionRow.createSpan({ cls: "examiner-small examiner-priority-advice", text: recommendation[priority.action] });
+		const advice = recommendation[priority.action];
+		if (advice) actionRow.createSpan({ cls: "examiner-small examiner-priority-advice", text: advice });
 
 		const buttons = actionRow.createDiv({ cls: "examiner-priority-buttons" });
 		if (priority.action === "review-mistakes") {
@@ -434,7 +431,7 @@ export class OverviewView extends ItemView {
 			for (const topic of topics) {
 				line.createSpan({
 					cls: "examiner-tag",
-					text: `${topic.tag} · ${topic.misses}`,
+					text: `${topic.tag} (${topic.misses})`,
 					attr: { title: `${topic.questions === 1 ? "1 question" : `${topic.questions} questions`}, ${topic.misses === 1 ? "1 miss" : `${topic.misses} misses`}` },
 				});
 			}
@@ -445,10 +442,8 @@ export class OverviewView extends ItemView {
 		shown.forEach((mistake, index) => {
 			const row = list.createEl("button", { cls: "examiner-attempt-row examiner-mistake-row" });
 			const main = row.createDiv({ cls: "examiner-row-main" });
-			main.createDiv({ cls: "examiner-mistake-title", text: `${mistake.examTitle || "Untitled exam"} · ${mistake.title || "Untitled question"}` });
-			const meta = [describeMisses(mistake), formatRelativeTime(mistake.lastMissedAt)];
-			if (mistake.correctSinceLastMiss) meta.push("answered correctly since");
-			main.createDiv({ cls: "examiner-row-meta", text: meta.join(" · ") });
+			main.createDiv({ cls: "examiner-mistake-title", text: `${mistake.examTitle || "Untitled exam"} ${mistake.title || "Untitled question"}` });
+			main.createDiv({ cls: "examiner-row-meta", text: describeMisses(mistake) });
 			if (isRepeated(mistake)) row.createSpan({ cls: "examiner-status-label", text: "Repeated" });
 			row.addEventListener("click", () => new MistakeReviewModal(this.plugin, mistakes, index).open());
 		});
@@ -495,7 +490,6 @@ function renderTrend(parent: HTMLElement, trend: ScoreTrend): void {
 		cls: `examiner-row-meta examiner-trend ${trend.points > 0 ? "is-up" : trend.points < 0 ? "is-down" : ""}`,
 		text,
 		attr: { title },
-
 	});
 
 }

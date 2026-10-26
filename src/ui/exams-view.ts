@@ -87,7 +87,7 @@ export class ExamsView extends ItemView {
 			const minutes = Math.max(0, Math.ceil((session.deadline - Date.now()) / 60_000));
 			details.push(minutes > 0 ? `about ${minutes} min left` : "time is up");
 		}
-		text.createDiv({ cls: "examiner-row-meta", text: details.join(" · ") });
+		text.createDiv({ cls: "examiner-row-meta", text: details.join(", ") });
 		const resume = textButton(banner, "Resume", true);
 		resume.addEventListener("click", () => void this.plugin.openExamSession());
 		const abandon = textButton(banner, "Abandon");
@@ -122,7 +122,7 @@ export class ExamsView extends ItemView {
 				? `${history.length === 1 ? "1 attempt" : `${history.length} attempts`}, last ${formatDateTime(latest.submittedAt)}`
 				: "not taken yet",
 		);
-		main.createDiv({ cls: "examiner-row-meta", text: meta.join(" · ") });
+		main.createDiv({ cls: "examiner-row-meta", text: meta.join(", ") });
 		renderTags(main, exam.tags);
 
 		const result = row.createDiv({ cls: "examiner-row-result" });
