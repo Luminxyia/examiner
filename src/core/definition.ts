@@ -60,6 +60,7 @@ export interface QuestionDefinition {
 	flashcard: Flashcard;
 	marks: number;
 	scientific?: boolean;
+	images?: string[];
 	tags: string[];
 }
 

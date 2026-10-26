@@ -10,6 +10,7 @@ import { createId } from "../storage/format-shared";
 import { toAttemptSummary, type ExamMarking, type ExamResultRecord, type ExamSession } from "../storage/results";
 import { OUTCOME_LABELS, renderExamResult } from "./exam-results";
 import { ReferenceViewerModal } from "./reference-viewer-modal";
+import { renderQuestionImages } from "./attachment-picker";
 import { confirm, formatMarks, renderEmptyState, renderMarkdown, textButton } from "./shared";
 
 export const VIEW_TYPE_EXAM_SESSION = "examiner-exam-session";
@@ -206,6 +207,7 @@ export class ExamSessionView extends ItemView {
 
 		const card = root.createDiv({ cls: "examiner-question" });
 		await renderMarkdown(this.app, card.createDiv({ cls: "examiner-prompt" }), item.kind === "flashcard" ? item.prompt : item.instance.prompt, this);
+		renderQuestionImages(card, this.plugin.questionImageAccess, item.questionId, item.images);
 		const instruction = item.kind === "flashcard" ? null : answerInstruction(item.answerRule);
 		if (instruction) card.createDiv({ cls: "examiner-instruction", text: instruction });
 
@@ -456,6 +458,7 @@ export class ExamSessionView extends ItemView {
 		const marks = itemMarks(item);
 		const card = root.createDiv({ cls: "examiner-question" });
 		await renderMarkdown(this.app, card.createDiv({ cls: "examiner-prompt" }), item.prompt, this);
+		renderQuestionImages(card, this.plugin.questionImageAccess, item.questionId, item.images);
 		const comparison = card.createEl("dl", { cls: "examiner-comparison" });
 		comparison.createEl("dt", { text: "Your answer" });
 		comparison.createEl("dd", { text: (session.responses[index] ?? "").trim() });
@@ -529,6 +532,7 @@ export class ExamSessionView extends ItemView {
 			attemptLabel: numbered ? `Attempt ${numbered.attemptNumber}` : undefined,
 			backLabel: "Back to exams",
 			onBack: () => void this.plugin.openExams(),
+			imageAccess: this.plugin.questionImageAccess,
 		});
 	}
 }

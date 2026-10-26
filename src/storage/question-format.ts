@@ -11,7 +11,8 @@ import {
 } from "../core/definition";
 import { normaliseTags } from "../core/tags";
 import { composeFile, readFrontmatter, type Frontmatter } from "./frontmatter";
-import { KEYS, readNumber, readString, readStringList, type ParseResult } from "./format-shared";
+import { attachmentKind } from "./attachments";
+import { KEYS, readFileNames, readNumber, readString, readStringList, type ParseResult } from "./format-shared";
 
 export const QUESTION_FORMAT_VERSION = 2;
 
@@ -44,6 +45,7 @@ export function parseQuestionFile(content: string): ParseResult<QuestionDefiniti
 	const steps = readSteps(data[KEYS.steps], errors);
 	const answer = readAnswerRule(data[KEYS.answer], errors);
 	const tags = readStringList(data[KEYS.tags], KEYS.tags, errors);
+	const images = readFileNames(data[KEYS.images], KEYS.images, errors, (name) => attachmentKind(name) === "image");
 
 	if (errors.length > 0 || !id) return { ok: false, errors };
 	return {
@@ -59,6 +61,7 @@ export function parseQuestionFile(content: string): ParseResult<QuestionDefiniti
 			flashcard,
 			marks,
 			...(data[KEYS.scientific] === true ? { scientific: true } : {}),
+			...(images.length > 0 ? { images } : {}),
 			tags: normaliseTags(tags),
 		},
 	};
@@ -80,6 +83,8 @@ export function serializeQuestion(definition: QuestionDefinition, previousConten
 		[KEYS.steps]: isFlashcard ? undefined : definition.steps.map((step) => `{${step.target}} = ${step.expression.trim()}`),
 		[KEYS.answer]: isFlashcard ? undefined : writeAnswerRule(definition.answer),
 		[KEYS.scientific]: !isFlashcard && definition.scientific ? true : undefined,
+		[KEYS.images]: definition.images && definition.images.length > 0 ? definition.images : undefined,
+
 		[KEYS.answerMode]: isFlashcard ? (isChoice ? "multiple-choice" : "written") : undefined,
 		[KEYS.expectedAnswer]: isFlashcard && !isChoice ? definition.flashcard.answer.trim() : undefined,
 		[KEYS.options]: isChoice ? definition.flashcard.options.map((option) => option.trim()) : undefined,

@@ -72,6 +72,7 @@ export class AttemptView extends ItemView {
 				attemptLabel: numbered ? `Attempt ${numbered.attemptNumber}` : undefined,
 				backLabel: "Back to overview",
 				onBack: () => void this.plugin.openOverview(),
+				imageAccess: this.plugin.questionImageAccess,
 			});
 		} else if (records.length > 0 || this.attemptId) {
 			renderEmptyState(root, "This attempt could not be found.");

@@ -12,9 +12,8 @@ import { hasAnyTag, normaliseTags } from "../core/tags";
 import type ExaminerPlugin from "../main";
 import { createId } from "../storage/format-shared";
 import { confirm, iconAction, renderLoadState, renderTags, textButton } from "./shared";
-import { AttachmentError, attachmentKind } from "../storage/attachments";
+import { addAttachments, renderAttachmentPicker } from "./attachment-picker";
 import { startExam } from "./start-exam";
-
 
 export const VIEW_TYPE_EXAM_EDITOR = "examiner-exam-editor";
 
@@ -112,13 +111,18 @@ export class ExamEditorView extends ItemView {
 
 	private handleExamsChange(): void {
 		if (!this.plugin.ready || this.saving || !this.toolbarEl) return;
-		if (!this.isNew && !this.plugin.exams.get(this.exam.id)) {
+		const stored = this.isNew ? undefined : this.plugin.exams.get(this.exam.id);
+		if (!this.isNew && !stored) {
 			this.loadExam(null);
 			this.render();
 			return;
 		}
+		if (stored && !this.isDirty() && JSON.stringify(stored) !== this.baseline) {
+			this.loadExam(stored.id);
+			this.render();
+			return;
+		}
 		this.renderToolbar();
-
 	}
 
 	private handleLibraryChange(): void {
@@ -428,67 +432,26 @@ export class ExamEditorView extends ItemView {
 	}
 
 	private renderAttachments(): void {
-		const el = this.attachmentsEl;
-		if (!el) return;
-		el.empty();
-		const names = this.exam.attachments ?? [];
-		if (names.length > 0) {
-			const list = el.createDiv({ cls: "examiner-attachment-list" });
-			for (const name of names) {
-				const row = list.createDiv({ cls: "examiner-attachment-row" });
-				setIcon(row.createSpan({ cls: "examiner-attachment-icon" }), attachmentKind(name) === "pdf" ? "file-text" : "image");
-				row.createSpan({ cls: "examiner-attachment-name", text: name, attr: { title: name } });
-				const remove = row.createEl("button", { cls: "clickable-icon", attr: { "aria-label": `Remove ${name}` } });
-				setIcon(remove, "x");
-				remove.addEventListener("click", () => {
-					const remaining = (this.exam.attachments ?? []).filter((entry) => entry !== name);
-					if (remaining.length > 0) this.exam.attachments = remaining;
-					else delete this.exam.attachments;
-					this.renderAttachments();
-					this.updateActions();
-				});
-			}
-		}
-
-		const zone = el.createDiv({ cls: "examiner-dropzone" });
-		zone.createSpan({ cls: "examiner-muted examiner-small", text: "Drop PDFs or images here" });
-		const input = zone.createEl("input", { type: "file", cls: "examiner-file-input", attr: { accept: ".pdf,image/*", multiple: "" } });
-		textButton(zone, "Browse").addEventListener("click", () => input.click());
-		input.addEventListener("change", () => {
-			const files = Array.from(input.files ?? []);
-			input.value = "";
-			void this.upload(files);
-		});
-		zone.addEventListener("dragover", (event) => {
-			event.preventDefault();
-			if (event.dataTransfer) event.dataTransfer.dropEffect = "copy";
-			zone.addClass("is-dragging");
-		});
-		zone.addEventListener("dragleave", (event) => {
-			if (!zone.contains(event.relatedTarget as Node | null)) zone.removeClass("is-dragging");
-		});
-		zone.addEventListener("drop", (event) => {
-			event.preventDefault();
-			zone.removeClass("is-dragging");
-			void this.upload(Array.from(event.dataTransfer?.files ?? []));
+		if (!this.attachmentsEl) return;
+		renderAttachmentPicker(this.attachmentsEl, {
+			names: this.exam.attachments ?? [],
+			hint: "Drop PDFs or images here",
+			accept: ".pdf,image/*",
+			onFiles: (files) => void this.upload(files),
+			onRemove: (name) => {
+				const remaining = (this.exam.attachments ?? []).filter((entry) => entry !== name);
+				if (remaining.length > 0) this.exam.attachments = remaining;
+				else delete this.exam.attachments;
+				this.renderAttachments();
+				this.updateActions();
+			},
 		});
 	}
 
 	private async upload(files: readonly File[]): Promise<void> {
 		const exam = this.exam;
-		for (const file of files) {
-			if (attachmentKind(file.name) === null) {
-				new Notice(`${file.name} is not a PDF or an image, so it was not attached.`);
-				continue;
-			}
-			try {
-				const name = await this.plugin.attachments.add(exam.id, file.name, await file.arrayBuffer(), exam.attachments ?? []);
-				exam.attachments = [...(exam.attachments ?? []), name];
-			} catch (error) {
-				console.error("Examiner: could not attach a file", error);
-				new Notice(error instanceof AttachmentError ? error.message : `Could not attach ${file.name}.`);
-			}
-		}
+		const added = await addAttachments(this.plugin.attachmentAccess, exam.id, files, exam.attachments ?? [], ["pdf", "image"]);
+		if (added.length > 0) exam.attachments = [...(exam.attachments ?? []), ...added];
 		if (exam !== this.exam) return;
 		this.renderAttachments();
 		this.updateActions();

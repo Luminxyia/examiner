@@ -3,6 +3,8 @@ import { itemMarks, type ExamItemResult, type ItemOutcome } from "../core/exam";
 import { workedSteps } from "../core/generate";
 import { formatDuration } from "../core/statistics";
 import type { ExamResultRecord } from "../storage/results";
+import { renderQuestionImages, type AttachmentAccess } from "./attachment-picker";
+
 import { renderOutcomeBar, renderScoreBars } from "./charts";
 import {
 	formatDateTime,
@@ -44,6 +46,7 @@ export interface ResultHeader {
 	attemptLabel?: string;
 	backLabel: string;
 	onBack: () => void;
+	imageAccess?: AttachmentAccess;
 }
 
 export async function renderExamResult(
@@ -88,10 +91,17 @@ export async function renderExamResult(
 
 	const review = section(root, "Review");
 	const list = review.createDiv({ cls: "examiner-review" });
-	for (const [index, item] of record.items.entries()) await renderReviewItem(app, component, list, item, index);
+	for (const [index, item] of record.items.entries()) await renderReviewItem(app, component, list, item, index, header.imageAccess);
 }
 
-async function renderReviewItem(app: App, component: Component, parent: HTMLElement, item: ExamItemResult, index: number): Promise<void> {
+async function renderReviewItem(
+	app: App,
+	component: Component,
+	parent: HTMLElement,
+	item: ExamItemResult,
+	index: number,
+	imageAccess: AttachmentAccess | undefined,
+): Promise<void> {
 	const outcome = displayedOutcome(item.outcome);
 	const details = parent.createEl("details", { cls: `examiner-review-item is-${outcome}` });
 	const summary = details.createEl("summary");
@@ -102,6 +112,8 @@ async function renderReviewItem(app: App, component: Component, parent: HTMLElem
 
 	const body = details.createDiv({ cls: "examiner-review-body" });
 	await renderMarkdown(app, body.createDiv({ cls: "examiner-prompt" }), item.prompt, component);
+	if (imageAccess) renderQuestionImages(body, imageAccess, item.questionId, item.images);
+
 	if (item.instruction) body.createDiv({ cls: "examiner-instruction", text: item.instruction });
 	const yourAnswer = outcome === "unanswered" ? "No answer" : item.response;
 	if (item.kind === "flashcard") {

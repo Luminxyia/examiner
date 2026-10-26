@@ -1,6 +1,7 @@
 import { loadPdfJs, Modal } from "obsidian";
 import type ExaminerPlugin from "../main";
-import { attachmentKind, attachmentMimeType } from "../storage/attachments";
+import { attachmentKind, attachmentLabel, attachmentMimeType } from "../storage/attachments";
+import { readAttachment } from "./attachment-picker";
 import { textButton } from "./shared";
 
 interface PdfViewport {
@@ -75,7 +76,7 @@ export class ReferenceViewerModal extends Modal {
 		const token = ++this.renderToken;
 		this.release();
 		const name = this.names[this.index] ?? "";
-		this.setTitle(name);
+		this.setTitle(attachmentLabel(name));
 		const { contentEl } = this;
 		contentEl.empty();
 
@@ -100,7 +101,7 @@ export class ReferenceViewerModal extends Modal {
 		};
 
 		try {
-			const data = await this.plugin.attachments.read(this.examId, name);
+			const data = await readAttachment(this.plugin.attachmentAccess, this.examId, name);
 			if (token !== this.renderToken) return;
 			if (attachmentKind(name) === "image") {
 				this.objectUrl = URL.createObjectURL(new Blob([data], { type: attachmentMimeType(name) }));

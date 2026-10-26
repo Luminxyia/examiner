@@ -2,6 +2,7 @@ import { Component, Modal, Setting } from "obsidian";
 import { workedSteps } from "../core/generate";
 import { describeMisses, type MistakeEntry } from "../core/insights";
 import type ExaminerPlugin from "../main";
+import { renderQuestionImages } from "./attachment-picker";
 import { formatDateTime, renderAnswerComparison, renderMarkdown, renderTags, renderWorking } from "./shared";
 
 export class MistakeReviewModal extends Modal {
@@ -43,6 +44,7 @@ export class MistakeReviewModal extends Modal {
 
 		await renderMarkdown(this.app, body.createDiv({ cls: "examiner-prompt" }), example.prompt, this.component);
 		if (token !== this.renderToken) return;
+		renderQuestionImages(body, this.plugin.questionImageAccess, mistake.questionId, example.images);
 		if (example.instruction) body.createDiv({ cls: "examiner-instruction", text: example.instruction });
 		renderAnswerComparison(body, example.response === "" ? "No answer" : example.response, example.expectedDisplay, example.note);
 		renderWorking(body, workedSteps({ inputs: example.inputs, steps: example.steps }), true);

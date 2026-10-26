@@ -34,6 +34,7 @@ interface ExamItemBase {
 	title: string;
 	tags: string[];
 	marks?: number;
+	images?: string[];
 }
 
 export interface CalculationItem extends ExamItemBase {
@@ -80,7 +81,13 @@ export function prepareExam(
 			preparation.unusable.push({ title: definition.title, reason: "The question has validation errors." });
 			continue;
 		}
-		const base = { questionId: definition.id, title: definition.title, tags: [...definition.tags], marks: definition.marks };
+		const base = {
+			questionId: definition.id,
+			title: definition.title,
+			tags: [...definition.tags],
+			marks: definition.marks,
+			...(definition.images && definition.images.length > 0 ? { images: [...definition.images] } : {}),
+		};
 		if (definition.kind === "flashcard") {
 			for (let i = 0; i < ref.count; i++) preparation.items.push({ ...base, kind: "flashcard", ...drawFlashcard(definition, random) });
 			continue;
@@ -110,6 +117,7 @@ export interface ExamItemResult {
 	mode?: FlashcardMode;
 	marks?: number;
 	awarded?: number;
+	images?: string[];
 	questionId: string;
 	title: string;
 	tags: string[];
@@ -184,6 +192,7 @@ export function markExam(
 				kind: "flashcard" as const,
 				mode: item.mode,
 				questionId: item.questionId,
+				...(item.images ? { images: item.images } : {}),
 				title: item.title,
 				tags: item.tags,
 				prompt: item.prompt,
@@ -207,6 +216,7 @@ export function markExam(
 
 		const base = {
 			questionId: item.questionId,
+			...(item.images ? { images: item.images } : {}),
 			title: item.title,
 			tags: item.tags,
 			prompt: item.instance.prompt,

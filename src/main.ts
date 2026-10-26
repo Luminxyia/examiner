@@ -3,13 +3,15 @@ import { hasErrors, validateDefinition, type QuestionDefinition } from "./core/d
 import type { ExamDefinition } from "./core/exam";
 import { StudyTracker } from "./core/study-time";
 import { EXAMPLE_QUESTION } from "./example";
-import { DEFAULT_SETTINGS, type ExaminerSettings } from "./settings";
+import { DEFAULT_SETTINGS, initialSettings, type ExaminerSettings } from "./settings";
 import { parseExamFile, serializeExam } from "./storage/exam-format";
 import { createId, fileKindOf } from "./storage/format-shared";
 import { DefinitionLibrary } from "./storage/library";
 import { parseQuestionFile, serializeQuestion } from "./storage/question-format";
 import { ResultsStore } from "./storage/results";
-import { AttachmentStore } from "./storage/attachments";
+import { AttachmentStore, renameVaultReferences, withRenamedReferences } from "./storage/attachments";
+import { VaultFiles } from "./storage/vault-files";
+import type { AttachmentAccess } from "./ui/attachment-picker";
 import { LoadState } from "./storage/load-state";
 import { AdapterFolderFiles } from "./storage/plugin-files";
 import { AttemptView, VIEW_TYPE_ATTEMPT, type AttemptViewState } from "./ui/attempt-view";
@@ -29,6 +31,8 @@ export default class ExaminerPlugin extends Plugin {
 	exams!: DefinitionLibrary<ExamDefinition>;
 	results!: ResultsStore;
 	attachments!: AttachmentStore;
+	questionImages!: AttachmentStore;
+	vaultFiles!: VaultFiles;
 	private tracker!: StudyTracker;
 	private pendingStudyWrite: Promise<void> = Promise.resolve();
 	readonly loadState = new LoadState();
@@ -48,6 +52,9 @@ export default class ExaminerPlugin extends Plugin {
 		this.exams = new DefinitionLibrary(files, { kind: "exam", parse: parseExamFile, serialize: serializeExam }, `${pluginFolder}/exams`);
 		this.results = new ResultsStore(this.app.vault.adapter, pluginFolder);
 		this.attachments = new AttachmentStore(this.app.vault.adapter, `${pluginFolder}/attachments`);
+		this.questionImages = new AttachmentStore(this.app.vault.adapter, `${pluginFolder}/question-images`);
+		this.vaultFiles = new VaultFiles(this.app, () => this.settings.reuseFolder);
+		this.registerEvent(this.app.vault.on("rename", (file, oldPath) => void this.followRename(oldPath, file.path)));
 
 		this.registerView(VIEW_TYPE_QUESTION_EDITOR, (leaf) => new QuestionEditorView(leaf, this));
 		this.registerView(VIEW_TYPE_PRACTICE, (leaf) => new PracticeView(leaf, this));
@@ -136,8 +143,7 @@ export default class ExaminerPlugin extends Plugin {
 	}
 
 	async loadSettings(): Promise<void> {
-		const saved = (await this.loadData()) as Partial<ExaminerSettings> | null;
-		this.settings = { ...DEFAULT_SETTINGS, ...saved };
+		this.settings = initialSettings((await this.loadData()) as Partial<ExaminerSettings> | null);
 	}
 
 	async saveSettings(): Promise<void> {
@@ -247,7 +253,33 @@ export default class ExaminerPlugin extends Plugin {
 		await this.openView({ type: VIEW_TYPE_EXAMS });
 	}
 
+	get attachmentAccess(): AttachmentAccess {
+		return { store: this.attachments, vault: this.vaultFiles, adapter: this.app.vault.adapter };
+	}
+
+	get questionImageAccess(): AttachmentAccess {
+		return { store: this.questionImages, vault: this.vaultFiles, adapter: this.app.vault.adapter };
+	}
+
+	private async followRename(oldPath: string, newPath: string): Promise<void> {
+		if (!this.ready) return;
+		const questions = withRenamedReferences(this.questions.definitions(), "images", oldPath, newPath);
+		const exams = withRenamedReferences(this.exams.definitions(), "attachments", oldPath, newPath);
+		if (questions.length === 0 && exams.length === 0) return;
+		try {
+			for (const question of questions) await this.questions.save(question);
+			for (const exam of exams) await this.exams.save(exam);
+			const session = await this.results.loadSession();
+			const attachments = session ? renameVaultReferences(session.attachments ?? [], oldPath, newPath) : null;
+			if (session && attachments) await this.results.saveSession({ ...session, attachments });
+		} catch (error) {
+			console.error("Examiner: could not update attachment references after a rename", error);
+			new Notice(`Examiner could not update its links to ${newPath} after it was renamed.`);
+		}
+	}
+
 	async resetAllData(): Promise<boolean> {
+
 		this.tracker.discard();
 		await this.pendingStudyWrite;
 		this.unsavedDraft = null;
@@ -258,6 +290,7 @@ export default class ExaminerPlugin extends Plugin {
 			["exams", () => this.exams.clear()],
 			["questions", () => this.questions.clear()],
 			["reference materials", () => this.attachments.clear()],
+			["question images", () => this.questionImages.clear()],
 		];
 		for (const [label, run] of steps) {
 			try {

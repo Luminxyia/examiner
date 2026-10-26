@@ -1,4 +1,5 @@
 import { parseNumberInput } from "../core/numbers";
+import { isValidAttachmentReference } from "./attachments";
 
 export const KEYS = {
 	kind: "examiner",
@@ -18,6 +19,7 @@ export const KEYS = {
 	scientific: "examiner-scientific-notation",
 	attachments: "examiner-attachments",
 	shuffle: "examiner-randomize-order",
+	images: "examiner-images",
 	timeLimit: "examiner-time-limit",
 	passingGrade: "examiner-passing-grade",
 	questions: "examiner-questions",
@@ -45,6 +47,21 @@ export function readNumber(value: unknown): number | undefined {
 		return parsed.ok ? parsed.value : undefined;
 	}
 	return undefined;
+}
+
+export function readFileNames(
+	raw: unknown,
+	key: string,
+	errors: string[],
+	accept: (name: string) => boolean = isValidAttachmentReference,
+): string[] {
+	if (raw === undefined || raw === null) return [];
+	if (!Array.isArray(raw)) {
+		errors.push(`"${key}" must be a list.`);
+		return [];
+	}
+	const names = raw.map((entry: unknown) => readString(entry) ?? "");
+	return [...new Set(names.filter((name) => isValidAttachmentReference(name) && accept(name)))];
 }
 
 export function readStringList(value: unknown, key: string, errors: string[]): string[] {

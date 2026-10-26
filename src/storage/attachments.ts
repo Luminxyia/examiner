@@ -48,6 +48,90 @@ export function isSafeAttachmentName(name: string): boolean {
 	return name.trim() !== "" && !/[\\/]/.test(name) && name !== "." && name !== ".." && attachmentKind(name) !== null;
 }
 
+const VAULT_PREFIX = "vault:";
+
+export function isVaultReference(reference: string): boolean {
+	return reference.startsWith(VAULT_PREFIX);
+}
+
+export function vaultPathOf(reference: string): string {
+	return reference.slice(VAULT_PREFIX.length);
+}
+
+export function vaultReference(path: string): string {
+	return `${VAULT_PREFIX}${path}`;
+}
+
+export function isSafeVaultPath(path: string): boolean {
+	if (path === "" || path.startsWith("/") || path.includes("\\")) return false;
+	return path.split("/").every((segment) => segment !== "" && segment !== "." && segment !== "..") && attachmentKind(path) !== null;
+}
+
+export function isValidAttachmentReference(reference: string): boolean {
+	return isVaultReference(reference) ? isSafeVaultPath(vaultPathOf(reference)) : isSafeAttachmentName(reference);
+}
+
+export function attachmentLabel(reference: string): string {
+	return isVaultReference(reference) ? vaultPathOf(reference) : reference;
+}
+
+export function renameVaultReferences(references: readonly string[], oldPath: string, newPath: string): string[] | null {
+	let changed = false;
+	const renamed = references.map((reference) => {
+		if (!isVaultReference(reference)) return reference;
+		const path = vaultPathOf(reference);
+		if (path !== oldPath && !path.startsWith(`${oldPath}/`)) return reference;
+		changed = true;
+		return vaultReference(`${newPath}${path.slice(oldPath.length)}`);
+	});
+	return changed ? renamed : null;
+}
+
+export function withRenamedReferences<K extends string, T extends Partial<Record<K, string[]>>>(
+	items: readonly T[],
+	key: K,
+	oldPath: string,
+	newPath: string,
+): T[] {
+	return items.flatMap((item) => {
+		const renamed = renameVaultReferences(item[key] ?? [], oldPath, newPath);
+		return renamed ? [{ ...item, [key]: renamed }] : [];
+	});
+}
+
+export function sameBytes(a: ArrayBuffer, b: ArrayBuffer): boolean {
+	if (a.byteLength !== b.byteLength) return false;
+	const left = new Uint8Array(a);
+	const right = new Uint8Array(b);
+	for (let index = 0; index < left.length; index++) {
+		if (left[index] !== right[index]) return false;
+	}
+	return true;
+}
+
+export interface VaultCandidate {
+	path: string;
+	size: number;
+}
+
+export async function findIdenticalFile(
+	data: ArrayBuffer,
+	fileName: string,
+	candidates: readonly VaultCandidate[],
+	read: (path: string) => Promise<ArrayBuffer>,
+): Promise<string | null> {
+	const extension = extensionOf(fileName);
+	for (const candidate of candidates) {
+		if (candidate.size !== data.byteLength || extensionOf(candidate.path) !== extension) continue;
+		try {
+			if (sameBytes(await read(candidate.path), data)) return candidate.path;
+		} catch {
+			continue;
+		}
+	}
+	return null;
+}
+
 export function sanitiseFileName(name: string): string {
 	const base = name.split(/[\\/]/).pop() ?? "";
 	const cleaned = Array.from(base, (char) => (char.charCodeAt(0) < 32 ? "-" : char))
@@ -75,33 +159,34 @@ export class AttachmentStore {
 		readonly folder: string,
 	) {}
 
-	private examFolder(examId: string): string {
-		return `${this.folder}/${examId}`;
+	private ownerFolder(ownerId: string): string {
+		return `${this.folder}/${ownerId}`;
 	}
 
-	path(examId: string, name: string): string {
+	path(ownerId: string, name: string): string {
 		if (!isSafeAttachmentName(name)) throw new AttachmentError(`"${name}" is not a valid attachment name.`);
-		return `${this.examFolder(examId)}/${name}`;
+		return `${this.ownerFolder(ownerId)}/${name}`;
 	}
 
-	async add(examId: string, fileName: string, data: ArrayBuffer, taken: readonly string[]): Promise<string> {
+	async add(ownerId: string, fileName: string, data: ArrayBuffer, taken: readonly string[]): Promise<string> {
 		const cleaned = sanitiseFileName(fileName);
 		if (attachmentKind(cleaned) === null) throw new AttachmentError(`${cleaned} is not a PDF or an image.`);
 		if (data.byteLength === 0) throw new AttachmentError(`${cleaned} is empty.`);
 		if (data.byteLength > MAX_ATTACHMENT_BYTES) throw new AttachmentError(`${cleaned} is larger than 25 MB.`);
-		const name = await this.uniqueName(examId, cleaned, taken);
+		const { name, exists } = await this.chooseName(ownerId, cleaned, data, taken);
+		if (exists) return name;
 		if (!(await this.files.exists(this.folder))) await this.files.mkdir(this.folder);
-		if (!(await this.files.exists(this.examFolder(examId)))) await this.files.mkdir(this.examFolder(examId));
-		await this.files.writeBinary(this.path(examId, name), data);
+		if (!(await this.files.exists(this.ownerFolder(ownerId)))) await this.files.mkdir(this.ownerFolder(ownerId));
+		await this.files.writeBinary(this.path(ownerId, name), data);
 		return name;
 	}
 
-	async read(examId: string, name: string): Promise<ArrayBuffer> {
-		return this.files.readBinary(this.path(examId, name));
+	async read(ownerId: string, name: string): Promise<ArrayBuffer> {
+		return this.files.readBinary(this.path(ownerId, name));
 	}
 
-	async prune(examId: string, keep: readonly string[]): Promise<void> {
-		const folder = this.examFolder(examId);
+	async prune(ownerId: string, keep: readonly string[]): Promise<void> {
+		const folder = this.ownerFolder(ownerId);
 		if (!(await this.files.exists(folder))) return;
 		const kept = new Set(keep);
 		const listed = await this.files.list(folder);
@@ -114,8 +199,8 @@ export class AttachmentStore {
 		if (remaining === 0) await this.files.rmdir(folder, false);
 	}
 
-	async removeExam(examId: string): Promise<void> {
-		const folder = this.examFolder(examId);
+	async removeOwner(ownerId: string): Promise<void> {
+		const folder = this.ownerFolder(ownerId);
 		if (await this.files.exists(folder)) await this.files.rmdir(folder, true);
 	}
 
@@ -123,16 +208,25 @@ export class AttachmentStore {
 		if (await this.files.exists(this.folder)) await this.files.rmdir(this.folder, true);
 	}
 
-	private async uniqueName(examId: string, name: string, taken: readonly string[]): Promise<string> {
+	private async chooseName(
+		ownerId: string,
+		name: string,
+		data: ArrayBuffer,
+		taken: readonly string[],
+	): Promise<{ name: string; exists: boolean }> {
 		const dot = name.lastIndexOf(".");
 		const stem = dot > 0 ? name.slice(0, dot) : name;
 		const extension = dot > 0 ? name.slice(dot) : "";
 		const used = new Set(taken.map((entry) => entry.toLowerCase()));
 		for (let index = 1; ; index++) {
 			const candidate = index === 1 ? name : `${stem} (${index})${extension}`;
+			const path = `${this.ownerFolder(ownerId)}/${candidate}`;
+			if (await this.files.exists(path)) {
+				if (sameBytes(await this.files.readBinary(path), data)) return { name: candidate, exists: true };
+				continue;
+			}
 			if (used.has(candidate.toLowerCase())) continue;
-			if (await this.files.exists(`${this.examFolder(examId)}/${candidate}`)) continue;
-			return candidate;
+			return { name: candidate, exists: false };
 		}
 	}
 }

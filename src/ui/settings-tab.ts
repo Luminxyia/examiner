@@ -12,6 +12,12 @@ export class ExaminerSettingTab extends PluginSettingTab {
 	override getSettingDefinitions(): SettingDefinitionItem[] {
 		return [
 			{
+				name: "Reuse files from folder",
+				desc: "When you attach a file, Examiner checks this folder and its subfolders for an identical file and links to it instead of making a copy. Leave empty to always make a copy.",
+				aliases: ["duplicate", "attachment", "image"],
+				control: { type: "folder", key: "reuseFolder", placeholder: "No folder" },
+			},
+			{
 				name: "Reset data",
 				desc: "Delete all questions, exams, exam results and study history.",
 				aliases: ["delete", "clear", "erase"],

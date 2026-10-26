@@ -7,54 +7,9 @@ import {
 	attachmentKind,
 	isSafeAttachmentName,
 	sanitiseFileName,
-	type BinaryFiles,
 } from "../src/storage/attachments";
 import { parseExamFile, serializeExam } from "../src/storage/exam-format";
-
-class FakeBinaryFiles implements BinaryFiles {
-	readonly files = new Map<string, ArrayBuffer>();
-	readonly folders = new Set<string>();
-
-	exists(path: string): Promise<boolean> {
-		return Promise.resolve(this.files.has(path) || this.folders.has(path));
-	}
-
-	mkdir(path: string): Promise<void> {
-		this.folders.add(path);
-		return Promise.resolve();
-	}
-
-	writeBinary(path: string, data: ArrayBuffer): Promise<void> {
-		this.files.set(path, data);
-		return Promise.resolve();
-	}
-
-	readBinary(path: string): Promise<ArrayBuffer> {
-		const data = this.files.get(path);
-		return data ? Promise.resolve(data) : Promise.reject(new Error(`No file at ${path}`));
-	}
-
-	list(path: string): Promise<{ files: string[]; folders: string[] }> {
-		const inside = (entry: string) => entry.startsWith(`${path}/`) && !entry.slice(path.length + 1).includes("/");
-		return Promise.resolve({ files: [...this.files.keys()].filter(inside), folders: [...this.folders].filter(inside) });
-	}
-
-	remove(path: string): Promise<void> {
-		this.files.delete(path);
-		return Promise.resolve();
-	}
-
-	rmdir(path: string, recursive: boolean): Promise<void> {
-		const nested = [...this.files.keys(), ...this.folders].filter((entry) => entry.startsWith(`${path}/`));
-		if (nested.length > 0 && !recursive) return Promise.reject(new Error("Folder is not empty"));
-		for (const entry of nested) {
-			this.files.delete(entry);
-			this.folders.delete(entry);
-		}
-		this.folders.delete(path);
-		return Promise.resolve();
-	}
-}
+import { FakeBinaryFiles } from "./fake-files";
 
 const bytes = (size = 4) => new Uint8Array(size).fill(7).buffer;
 const FOLDER = "plugin/attachments";
@@ -120,7 +75,7 @@ describe("AttachmentStore", () => {
 		const store = new AttachmentStore(files, FOLDER);
 		await store.add("e-1", "a.pdf", bytes(), []);
 		await store.add("e-2", "b.pdf", bytes(), []);
-		await store.removeExam("e-1");
+		await store.removeOwner("e-1");
 		expect([...files.files.keys()]).toEqual([`${FOLDER}/e-2/b.pdf`]);
 		await store.clear();
 		expect(files.files.size).toBe(0);

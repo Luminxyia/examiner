@@ -36,6 +36,8 @@ import type ExaminerPlugin from "../main";
 import { createId } from "../storage/format-shared";
 import { withoutDefaultTags } from "../example";
 import { serializeQuestion } from "../storage/question-format";
+import { isVaultReference } from "../storage/attachments";
+import { addAttachments, renderAttachmentPicker, renderQuestionImages } from "./attachment-picker";
 import { createPromptEditor } from "./prompt-editor";
 import { confirm, iconAction, renderLoadState, renderMarkdown, renderWorking, section, textButton } from "./shared";
 import { renderTagEditor } from "./tag-editor";
@@ -121,6 +123,7 @@ export class QuestionEditorView extends ItemView {
 	private pendingQuestionId: string | null = null;
 	private pendingNew = false;
 	private dragging: { list: unknown[]; index: number } | null = null;
+	private imagesEl: HTMLElement | null = null;
 
 	private formRendered = false;
 	private previewToken = 0;
@@ -254,6 +257,7 @@ export class QuestionEditorView extends ItemView {
 			this.renderToolbar();
 			return;
 		}
+		await this.discardUploads();
 		this.loadQuestion(id === null ? null : (this.plugin.questions.get(id) ?? null));
 		if (id !== null && !this.saved) new Notice("That question could not be found.");
 		this.render();
@@ -267,8 +271,14 @@ export class QuestionEditorView extends ItemView {
 
 	private handleLibraryChange(): void {
 		if (this.saving || !this.plugin.ready) return;
-		if (this.saved && !this.plugin.questions.get(this.saved.id)) {
+		const stored = this.saved ? this.plugin.questions.get(this.saved.id) : undefined;
+		if (this.saved && !stored) {
 			this.loadQuestion(this.plugin.questions.definitions()[0] ?? null);
+			this.render();
+			return;
+		}
+		if (stored && this.saved && !this.isDirty() && serializeQuestion(stored) !== serializeQuestion(this.saved)) {
+			this.loadQuestion(stored);
 			this.render();
 			return;
 		}
@@ -361,6 +371,7 @@ export class QuestionEditorView extends ItemView {
 		if (!this.plugin.ready) return;
 		this.formRendered = true;
 		this.calculatedEl = null;
+		this.imagesEl = null;
 		this.renderDetailsSection();
 		if (this.draft.kind === "flashcard") {
 			this.renderFlashcardQuestionSection();
@@ -451,6 +462,63 @@ export class QuestionEditorView extends ItemView {
 		area.setAttribute("aria-label", "Question");
 		area.placeholder = "What is resonant frequency?";
 		this.slot(body, "prompt");
+		this.renderImagesField(body);
+	}
+
+	private renderImagesField(body: HTMLElement): void {
+		body.createDiv({ cls: "examiner-field-label", text: "Images" });
+		this.imagesEl = body.createDiv({ cls: "examiner-attachments" });
+		this.renderImages();
+	}
+
+	private renderImages(): void {
+		if (!this.imagesEl) return;
+		renderAttachmentPicker(this.imagesEl, {
+			names: this.draft.images ?? [],
+			hint: "Drop images here",
+			accept: "image/*",
+			onFiles: (files) => void this.uploadImages(files),
+			onRemove: (name) => {
+				const remaining = (this.draft.images ?? []).filter((entry) => entry !== name);
+				if (remaining.length > 0) this.draft.images = remaining;
+				else delete this.draft.images;
+				this.renderImages();
+				this.changed();
+			},
+		});
+	}
+
+	private async uploadImages(files: readonly File[]): Promise<void> {
+		const draft = this.draft;
+		const added = await addAttachments(this.plugin.questionImageAccess, draft.id, files, draft.images ?? [], ["image"]);
+		if (added.length > 0) draft.images = [...(draft.images ?? []), ...added];
+		if (draft !== this.draft) return;
+		this.renderImages();
+		this.changed();
+	}
+
+	private async discardUploads(): Promise<void> {
+		const stored = this.plugin.questions.get(this.draft.id);
+		await this.plugin.questionImages.prune(this.draft.id, stored?.images ?? []).catch((error: unknown) => {
+			console.error("Examiner: could not tidy up unsaved question images", error);
+		});
+	}
+
+	private async copyImages(fromId: string, toId: string, names: readonly string[]): Promise<string[]> {
+		const copied: string[] = [];
+		for (const name of names) {
+			if (isVaultReference(name)) {
+				copied.push(name);
+				continue;
+			}
+			try {
+				copied.push(await this.plugin.questionImages.add(toId, name, await this.plugin.questionImages.read(fromId, name), copied));
+			} catch (error) {
+				console.error(`Examiner: could not copy the image ${name}`, error);
+				new Notice(`Could not copy the image ${name} to the new question.`);
+			}
+		}
+		return copied;
 	}
 
 	private renderFlashcardAnswerSection(): void {
@@ -522,6 +590,7 @@ export class QuestionEditorView extends ItemView {
 		});
 		this.inputsByPath.set("prompt", container);
 		this.slot(body, "prompt");
+		this.renderImagesField(body);
 	}
 
 	private renderVariablesSection(): void {
@@ -899,6 +968,7 @@ export class QuestionEditorView extends ItemView {
 		const surface = box.createDiv({ cls: "examiner-question is-preview" });
 		await renderMarkdown(this.app, surface.createDiv({ cls: "examiner-prompt" }), instance.prompt, this);
 		if (token !== this.previewToken) return;
+		renderQuestionImages(surface, this.plugin.questionImageAccess, definition.id, definition.images);
 		const instruction = answerInstruction(definition.answer);
 		if (instruction) surface.createDiv({ cls: "examiner-instruction", text: instruction });
 
@@ -933,6 +1003,7 @@ export class QuestionEditorView extends ItemView {
 		const surface = box.createDiv({ cls: "examiner-question is-preview" });
 		await renderMarkdown(this.app, surface.createDiv({ cls: "examiner-prompt" }), definition.prompt, this);
 		if (token !== this.previewToken) return;
+		renderQuestionImages(surface, this.plugin.questionImageAccess, definition.id, definition.images);
 		const tbody = box.createEl("table", { cls: "examiner-table" }).createEl("tbody");
 		const card = definition.flashcard;
 		if (card.mode === "choice") {
@@ -962,9 +1033,15 @@ export class QuestionEditorView extends ItemView {
 		};
 		const stored = this.plugin.questions.get(definition.id) ?? null;
 		const action = questionSaveAction(stored, definition.title);
+		const originalId = definition.id;
 		if (action === "copy") definition.id = createId("q");
 		this.saving = true;
 		try {
+			if (action === "copy" && definition.images) {
+				const images = await this.copyImages(originalId, definition.id, definition.images);
+				if (images.length > 0) definition.images = images;
+				else delete definition.images;
+			}
 			if (action === "update") await this.plugin.questions.save(definition);
 			else await this.plugin.questions.create(definition);
 		} catch (error) {
@@ -972,6 +1049,14 @@ export class QuestionEditorView extends ItemView {
 			return;
 		} finally {
 			this.saving = false;
+		}
+		await this.plugin.questionImages.prune(definition.id, definition.images ?? []).catch((error: unknown) => {
+			console.error("Examiner: could not tidy up removed question images", error);
+		});
+		if (action === "copy") {
+			await this.plugin.questionImages.prune(originalId, stored?.images ?? []).catch((error: unknown) => {
+				console.error("Examiner: could not tidy up the original question's images", error);
+			});
 		}
 		this.loadQuestion(this.plugin.questions.get(definition.id) ?? definition);
 		this.render();
@@ -983,6 +1068,7 @@ export class QuestionEditorView extends ItemView {
 
 	private async discard(): Promise<void> {
 		if (!(await this.confirmDiscard())) return;
+		await this.discardUploads();
 		this.loadQuestion(this.saved ? (this.plugin.questions.get(this.saved.id) ?? this.saved) : null);
 		this.render();
 	}
@@ -1000,9 +1086,13 @@ export class QuestionEditorView extends ItemView {
 		this.saving = true;
 		try {
 			await this.plugin.questions.delete(this.saved.id);
+			await this.plugin.questionImages.removeOwner(this.saved.id).catch((error: unknown) => {
+				console.error("Examiner: could not delete the question's images", error);
+			});
 		} finally {
 			this.saving = false;
 		}
+
 		this.loadQuestion(this.plugin.questions.definitions()[0] ?? null);
 		this.render();
 		new Notice(`Deleted "${title}".`);

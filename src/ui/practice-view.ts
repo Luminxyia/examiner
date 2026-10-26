@@ -8,6 +8,7 @@ import type { StudyContext } from "../core/study-time";
 import type ExaminerPlugin from "../main";
 import { createId } from "../storage/format-shared";
 import type { PracticeAttemptRecord } from "../storage/results";
+import { renderQuestionImages } from "./attachment-picker";
 import { iconAction, renderAnswerComparison, renderEmptyState, renderLoadState, renderMarkdown, renderTags, renderWorking, textButton } from "./shared";
 
 export const VIEW_TYPE_PRACTICE = "examiner-practice";
@@ -169,6 +170,7 @@ export class PracticeView extends ItemView {
 			const surface = root.createDiv({ cls: "examiner-question" });
 			await renderMarkdown(this.app, surface.createDiv({ cls: "examiner-prompt" }), this.card.prompt, this);
 			if (token !== this.renderToken) return;
+			renderQuestionImages(surface, this.plugin.questionImageAccess, question.id, question.images);
 			this.renderFlashcard(surface, question, this.card);
 			return this.show(root, token);
 		}
@@ -181,6 +183,7 @@ export class PracticeView extends ItemView {
 		const card = root.createDiv({ cls: "examiner-question" });
 		await renderMarkdown(this.app, card.createDiv({ cls: "examiner-prompt" }), instance.prompt, this);
 		if (token !== this.renderToken) return;
+		renderQuestionImages(card, this.plugin.questionImageAccess, question.id, question.images);
 		const instruction = answerInstruction(question.answer);
 		if (instruction) card.createDiv({ cls: "examiner-instruction", text: instruction });
 

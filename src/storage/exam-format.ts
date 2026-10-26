@@ -8,8 +8,7 @@ import {
 } from "../core/exam";
 import { normaliseTags } from "../core/tags";
 import { composeFile, readFrontmatter, type Frontmatter } from "./frontmatter";
-import { isSafeAttachmentName } from "./attachments";
-import { KEYS, readNumber, readString, readStringList, type ParseResult } from "./format-shared";
+import { KEYS, readFileNames, readNumber, readString, readStringList, type ParseResult } from "./format-shared";
 
 export const EXAM_FORMAT_VERSION = 1;
 
@@ -43,7 +42,7 @@ export function parseExamFile(content: string): ParseResult<ExamDefinition> {
 
 	const questions = readQuestionRefs(data[KEYS.questions], errors);
 	const tags = readStringList(data[KEYS.tags], KEYS.tags, errors);
-	const attachments = readAttachments(data[KEYS.attachments], errors);
+	const attachments = readFileNames(data[KEYS.attachments], KEYS.attachments, errors);
 
 	if (errors.length > 0 || !id) return { ok: false, errors };
 	return {
@@ -59,16 +58,6 @@ export function parseExamFile(content: string): ParseResult<ExamDefinition> {
 			...(data[KEYS.shuffle] === true ? { shuffle: true } : {}),
 		},
 	};
-}
-
-function readAttachments(raw: unknown, errors: string[]): string[] {
-	if (raw === undefined || raw === null) return [];
-	if (!Array.isArray(raw)) {
-		errors.push(`"${KEYS.attachments}" must be a list.`);
-		return [];
-	}
-	const names = raw.map((entry: unknown) => readString(entry) ?? "");
-	return [...new Set(names.filter(isSafeAttachmentName))];
 }
 
 export function serializeExam(exam: ExamDefinition, previousContent?: string): string {
