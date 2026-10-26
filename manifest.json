@@ -1,0 +1,9 @@
+{
+	"id": "examiner",
+	"name": "Examiner",
+	"version": "0.1.0",
+	"minAppVersion": "1.13.0",
+	"description": "Create tailored questions and exams.",
+	"author": "Luminxyia",
+	"isDesktopOnly": false
+}
