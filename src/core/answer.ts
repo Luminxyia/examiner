@@ -1,5 +1,5 @@
 import type { AnswerRule } from "./definition";
-import { formatFixed, formatNumber, roundToPlaces } from "./numbers";
+import { formatFixed, formatNumber, formatScientific, roundToPlaces } from "./numbers";
 
 const EXACT_RELATIVE_TOLERANCE = 1e-9;
 
@@ -7,7 +7,8 @@ export function expectedAnswer(rule: AnswerRule, answer: number): number {
 	return rule.check === "rounded" ? roundToPlaces(answer, rule.places) : answer;
 }
 
-export function formatExpectedAnswer(rule: AnswerRule, answer: number): string {
+export function formatExpectedAnswer(rule: AnswerRule, answer: number, scientific = false): string {
+	if (scientific) return formatScientific(expectedAnswer(rule, answer));
 	return rule.check === "rounded" ? formatFixed(answer, rule.places) : formatNumber(answer);
 }
 

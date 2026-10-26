@@ -16,6 +16,7 @@ import {
 	blankFlashcard,
 	DEFAULT_MARKS,
 	hasErrors,
+	questionSaveAction,
 	validateDefinition,
 	type AnswerRule,
 	type FlashcardMode,
@@ -179,7 +180,7 @@ export class QuestionEditorView extends ItemView {
 		const pending = this.plugin.unsavedDraft;
 		if (pending && (newQuestion ? pending.isNew : questionId === undefined || questionId === pending.draft.id)) {
 			this.plugin.unsavedDraft = null;
-			this.saved = pending.isNew ? null : (this.plugin.questions.get(pending.draft.id) ?? null);
+			this.saved = this.plugin.questions.get(pending.draft.id) ?? null;
 			this.draft = structuredClone(pending.draft);
 			this.render();
 			new Notice(`Restored unsaved changes to "${this.draft.title || "Untitled question"}".`);
@@ -759,6 +760,15 @@ export class QuestionEditorView extends ItemView {
 			this.labelledField(row, "Tolerance (±%)", "answer.tolerance", showNumber(rule.percent), (text) => (rule.percent = readNumberField(text)));
 		}
 		this.slot(body, "answer");
+		const scientific = body.createEl("label", { cls: "examiner-checkbox-field" });
+		const checkbox = scientific.createEl("input", { type: "checkbox" });
+		checkbox.checked = this.draft.scientific === true;
+		checkbox.addEventListener("change", () => {
+			if (checkbox.checked) this.draft.scientific = true;
+			else delete this.draft.scientific;
+			this.changed();
+		});
+		scientific.createSpan({ text: "Show answer in scientific notation" });
 	}
 
 	private defaultRule(check: AnswerRule["check"]): AnswerRule {
@@ -908,7 +918,7 @@ export class QuestionEditorView extends ItemView {
 		}
 		const answerRow = tbody.createEl("tr", { cls: "examiner-answer-row" });
 		answerRow.createEl("td", { text: "Expected answer" });
-		answerRow.createEl("td", { text: formatExpectedAnswer(definition.answer, instance.answer) });
+		answerRow.createEl("td", { text: formatExpectedAnswer(definition.answer, instance.answer, definition.scientific) });
 
 		renderWorking(box, workedSteps(instance), true);
 
@@ -957,16 +967,19 @@ export class QuestionEditorView extends ItemView {
 	}
 
 	private async save(): Promise<void> {
-		if (!this.isDirty() && this.saved) return;
+		if (this.saving || (!this.isDirty() && this.saved)) return;
 		const definition: QuestionDefinition = {
 			...structuredClone(this.draft),
 			title: this.draft.title.trim(),
 			prompt: this.draft.prompt.trim(),
 			tags: normaliseTags(this.draft.tags),
 		};
+		const stored = this.plugin.questions.get(definition.id) ?? null;
+		const action = questionSaveAction(stored, definition.title);
+		if (action === "copy") definition.id = createId("q");
 		this.saving = true;
 		try {
-			if (this.saved && this.plugin.questions.get(this.saved.id)) await this.plugin.questions.save(definition);
+			if (action === "update") await this.plugin.questions.save(definition);
 			else await this.plugin.questions.create(definition);
 		} catch (error) {
 			new Notice(`Could not save the question: ${error instanceof Error ? error.message : String(error)}`);
@@ -978,11 +991,8 @@ export class QuestionEditorView extends ItemView {
 		this.render();
 		this.app.workspace.requestSaveLayout();
 		const label = definition.title || "Untitled question";
-		new Notice(
-			hasErrors(validateDefinition(definition))
-				? `Saved "${label}". Fix its errors before practicing it.`
-				: `Saved "${label}".`,
-		);
+		const saved = action === "copy" ? `Saved "${label}" as a new question. "${stored?.title || "Untitled question"}" was kept.` : `Saved "${label}".`;
+		new Notice(hasErrors(validateDefinition(definition)) ? `${saved} Fix its errors before practicing it.` : saved);
 	}
 
 	private async discard(): Promise<void> {

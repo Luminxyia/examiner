@@ -9,6 +9,7 @@ import type ExaminerPlugin from "../main";
 import { createId } from "../storage/format-shared";
 import { toAttemptSummary, type ExamMarking, type ExamResultRecord, type ExamSession } from "../storage/results";
 import { OUTCOME_LABELS, renderExamResult } from "./exam-results";
+import { ReferenceViewerModal } from "./reference-viewer-modal";
 import { confirm, formatMarks, renderEmptyState, renderMarkdown, textButton } from "./shared";
 
 export const VIEW_TYPE_EXAM_SESSION = "examiner-exam-session";
@@ -185,7 +186,14 @@ export class ExamSessionView extends ItemView {
 		const position = header.createDiv();
 		position.createDiv({ cls: "examiner-eyebrow", text: session.examTitle || "Untitled exam" });
 		position.createDiv({ cls: "examiner-exam-position", text: `Question ${index + 1} of ${session.items.length}` });
-		const timer = header.createDiv({ cls: "examiner-timer" });
+		const side = header.createDiv({ cls: "examiner-exam-header-side" });
+		const attachments = session.attachments ?? [];
+		if (attachments.length > 0) {
+			textButton(side, "Show formula sheet").addEventListener("click", () => {
+				new ReferenceViewerModal(this.plugin, session.examId, attachments).open();
+			});
+		}
+		const timer = side.createDiv({ cls: "examiner-timer" });
 		setIcon(timer.createSpan({ cls: "examiner-timer-icon" }), "timer");
 		if (session.deadline === null) {
 			timer.createSpan({ cls: "examiner-muted", text: "Untimed" });
@@ -442,10 +450,6 @@ export class ExamSessionView extends ItemView {
 		const heading = header.createDiv();
 		heading.createDiv({ cls: "examiner-eyebrow", text: session.examTitle || "Untitled exam" });
 		heading.createDiv({ cls: "examiner-exam-position", text: `Marking answer ${position + 1} of ${pending.length}` });
-		header.createDiv({
-			cls: "examiner-muted examiner-small",
-			text: remaining === 0 ? "All answers marked" : `${remaining} left to mark`,
-		});
 		this.renderProgress(root, pending.length - remaining, pending.length, "Marking progress");
 
 		if (!item || item.kind !== "flashcard") return;

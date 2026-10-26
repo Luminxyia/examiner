@@ -58,6 +58,7 @@ export function parseQuestionFile(content: string): ParseResult<QuestionDefiniti
 			answer,
 			flashcard,
 			marks,
+			...(data[KEYS.scientific] === true ? { scientific: true } : {}),
 			tags: normaliseTags(tags),
 		},
 	};
@@ -78,6 +79,7 @@ export function serializeQuestion(definition: QuestionDefinition, previousConten
 		[KEYS.variables]: isFlashcard ? undefined : definition.variables.map(writeVariable),
 		[KEYS.steps]: isFlashcard ? undefined : definition.steps.map((step) => `{${step.target}} = ${step.expression.trim()}`),
 		[KEYS.answer]: isFlashcard ? undefined : writeAnswerRule(definition.answer),
+		[KEYS.scientific]: !isFlashcard && definition.scientific ? true : undefined,
 		[KEYS.answerMode]: isFlashcard ? (isChoice ? "multiple-choice" : "written") : undefined,
 		[KEYS.expectedAnswer]: isFlashcard && !isChoice ? definition.flashcard.answer.trim() : undefined,
 		[KEYS.options]: isChoice ? definition.flashcard.options.map((option) => option.trim()) : undefined,

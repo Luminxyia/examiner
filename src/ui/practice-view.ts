@@ -256,7 +256,7 @@ export class PracticeView extends ItemView {
 		if (submission.check.hint) feedback.createDiv({ cls: "examiner-small", text: submission.check.hint });
 
 		if (submission.revealed) {
-			renderAnswerComparison(feedback, submission.response, formatExpectedAnswer(question.answer, instance.answer));
+			renderAnswerComparison(feedback, submission.response, formatExpectedAnswer(question.answer, instance.answer, question.scientific));
 			renderWorking(feedback, workedSteps(instance), !correct);
 		}
 
@@ -391,7 +391,7 @@ export class PracticeView extends ItemView {
 			inputs: instance.inputs,
 			steps: instance.steps,
 			answer: instance.answer,
-			expectedDisplay: formatExpectedAnswer(question.answer, instance.answer),
+			expectedDisplay: formatExpectedAnswer(question.answer, instance.answer, question.scientific),
 			response: submission.response,
 			correct: submission.check.correct,
 		};

@@ -31,6 +31,11 @@ export type AnswerRule =
 
 export type QuestionKind = "calculation" | "flashcard";
 
+export const QUESTION_KIND_NAMES: Record<QuestionKind, string> = {
+	calculation: "Calculation",
+	flashcard: "Flashcard",
+};
+
 export type FlashcardMode = "written" | "choice";
 
 export interface Flashcard {
@@ -54,7 +59,15 @@ export interface QuestionDefinition {
 	answer: AnswerRule;
 	flashcard: Flashcard;
 	marks: number;
+	scientific?: boolean;
 	tags: string[];
+}
+
+export type QuestionSaveAction = "update" | "copy" | "create";
+
+export function questionSaveAction(stored: Pick<QuestionDefinition, "title"> | null, title: string): QuestionSaveAction {
+	if (!stored) return "create";
+	return title.trim() === stored.title.trim() ? "update" : "copy";
 }
 
 export function blankFlashcard(): Flashcard {

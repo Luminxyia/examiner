@@ -15,6 +15,8 @@ export const KEYS = {
 	expectedAnswer: "examiner-expected-answer",
 	options: "examiner-options",
 	correctOption: "examiner-correct-option",
+	scientific: "examiner-scientific-notation",
+	attachments: "examiner-attachments",
 	timeLimit: "examiner-time-limit",
 	passingGrade: "examiner-passing-grade",
 	questions: "examiner-questions",

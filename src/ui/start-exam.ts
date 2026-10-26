@@ -47,6 +47,7 @@ export async function startExam(plugin: ExaminerPlugin, exam: ExamDefinition): P
 		items: preparation.items,
 		responses: preparation.items.map(() => ""),
 		current: 0,
+		...(exam.attachments && exam.attachments.length > 0 ? { attachments: [...exam.attachments] } : {}),
 	});
 	await plugin.openExamSession();
 }

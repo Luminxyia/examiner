@@ -1,5 +1,5 @@
 import { DropdownComponent, ItemView, Notice, setIcon, Setting, type ViewStateResult, type WorkspaceLeaf } from "obsidian";
-import { hasErrors, type ValidationIssue } from "../core/definition";
+import { hasErrors, QUESTION_KIND_NAMES, type ValidationIssue } from "../core/definition";
 import {
 	DEFAULT_PASSING_PERCENT,
 	formatTimeLimit,
@@ -12,7 +12,9 @@ import { hasAnyTag, normaliseTags } from "../core/tags";
 import type ExaminerPlugin from "../main";
 import { createId } from "../storage/format-shared";
 import { confirm, iconAction, renderLoadState, renderTags, textButton } from "./shared";
+import { AttachmentError, attachmentKind } from "../storage/attachments";
 import { startExam } from "./start-exam";
+
 
 export const VIEW_TYPE_EXAM_EDITOR = "examiner-exam-editor";
 
@@ -40,6 +42,7 @@ export class ExamEditorView extends ItemView {
 	private titleIssuesEl: HTMLElement | null = null;
 	private passingIssuesEl: HTMLElement | null = null;
 	private questionIssuesEl: HTMLElement | null = null;
+	private attachmentsEl: HTMLElement | null = null;
 	private toolbarEl: HTMLElement | null = null;
 	private discardButton: HTMLButtonElement | null = null;
 	private saveButton: HTMLButtonElement | null = null;
@@ -73,7 +76,10 @@ export class ExamEditorView extends ItemView {
 		const pendingDraft = draft ? this.plugin.pendingExamDraft : null;
 		if (pendingDraft && this.plugin.ready) {
 			this.plugin.pendingExamDraft = null;
-			if (await this.confirmDiscard()) this.loadDraft(pendingDraft);
+			if (await this.confirmDiscard()) {
+				await this.discardUploads();
+				this.loadDraft(pendingDraft);
+			}
 		} else if (!this.plugin.ready) {
 			this.requestedId = examId;
 		} else if (examId !== (this.isNew ? null : this.exam.id) || (examId === null && !this.isDirty())) {
@@ -89,6 +95,10 @@ export class ExamEditorView extends ItemView {
 		this.register(this.plugin.exams.onChange(() => this.handleExamsChange()));
 		this.render();
 		await Promise.resolve();
+	}
+
+	override async onClose(): Promise<void> {
+		if (this.isDirty()) await this.discardUploads();
 	}
 
 	private handleLoadStateChange(): void {
@@ -125,6 +135,7 @@ export class ExamEditorView extends ItemView {
 			this.renderToolbar();
 			return;
 		}
+		await this.discardUploads();
 		this.loadExam(examId);
 		this.render();
 	}
@@ -139,7 +150,6 @@ export class ExamEditorView extends ItemView {
 	}
 
 	private loadExam(examId: string | null): void {
-
 		const existing = examId === null ? undefined : this.plugin.exams.get(examId);
 		if (examId !== null && !existing) new Notice("That exam could not be found.");
 		this.isNew = !existing;
@@ -211,6 +221,10 @@ export class ExamEditorView extends ItemView {
 			text.inputEl.insertAdjacentElement("afterend", createSpan({ cls: "examiner-muted", text: "%" }));
 		});
 		this.passingIssuesEl = details.createDiv({ cls: "examiner-field-issues" });
+
+		details.createDiv({ cls: "examiner-section-title", text: "Reference materials" });
+		this.attachmentsEl = details.createDiv({ cls: "examiner-attachments" });
+		this.renderAttachments();
 
 		details.createDiv({ cls: "examiner-section-title", text: "Questions" });
 		this.questionIssuesEl = details.createDiv({ cls: "examiner-field-issues" });
@@ -299,6 +313,7 @@ export class ExamEditorView extends ItemView {
 		const table = scroller.createEl("table", { cls: "examiner-question-table" });
 		const head = table.createEl("thead").createEl("tr");
 		head.createEl("th", { text: "Question" });
+		head.createEl("th", { cls: "examiner-col-type", text: "Type" });
 		head.createEl("th", { cls: "examiner-col-count", text: "Amount" });
 		head.createEl("th", { cls: "examiner-col-action", attr: { "aria-label": "Remove" } });
 
@@ -317,6 +332,8 @@ export class ExamEditorView extends ItemView {
 			} else {
 				info.createDiv({ cls: "examiner-warning-text", text: `Missing question (${ref.questionId}). It will be skipped.` });
 			}
+
+			row.createEl("td", { cls: "examiner-col-type", text: question ? QUESTION_KIND_NAMES[question.kind] : "" });
 
 			const count = row.createEl("td", { cls: "examiner-col-count" }).createEl("input", {
 				type: "number",
@@ -402,13 +419,89 @@ export class ExamEditorView extends ItemView {
 		});
 	}
 
+	private renderAttachments(): void {
+		const el = this.attachmentsEl;
+		if (!el) return;
+		el.empty();
+		const names = this.exam.attachments ?? [];
+		if (names.length > 0) {
+			const list = el.createDiv({ cls: "examiner-attachment-list" });
+			for (const name of names) {
+				const row = list.createDiv({ cls: "examiner-attachment-row" });
+				setIcon(row.createSpan({ cls: "examiner-attachment-icon" }), attachmentKind(name) === "pdf" ? "file-text" : "image");
+				row.createSpan({ cls: "examiner-attachment-name", text: name, attr: { title: name } });
+				const remove = row.createEl("button", { cls: "clickable-icon", attr: { "aria-label": `Remove ${name}` } });
+				setIcon(remove, "x");
+				remove.addEventListener("click", () => {
+					const remaining = (this.exam.attachments ?? []).filter((entry) => entry !== name);
+					if (remaining.length > 0) this.exam.attachments = remaining;
+					else delete this.exam.attachments;
+					this.renderAttachments();
+					this.updateActions();
+				});
+			}
+		}
+
+		const zone = el.createDiv({ cls: "examiner-dropzone" });
+		zone.createSpan({ cls: "examiner-muted examiner-small", text: "Drop PDFs or images here" });
+		const input = zone.createEl("input", { type: "file", cls: "examiner-file-input", attr: { accept: ".pdf,image/*", multiple: "" } });
+		textButton(zone, "Browse").addEventListener("click", () => input.click());
+		input.addEventListener("change", () => {
+			const files = Array.from(input.files ?? []);
+			input.value = "";
+			void this.upload(files);
+		});
+		zone.addEventListener("dragover", (event) => {
+			event.preventDefault();
+			if (event.dataTransfer) event.dataTransfer.dropEffect = "copy";
+			zone.addClass("is-dragging");
+		});
+		zone.addEventListener("dragleave", (event) => {
+			if (!zone.contains(event.relatedTarget as Node | null)) zone.removeClass("is-dragging");
+		});
+		zone.addEventListener("drop", (event) => {
+			event.preventDefault();
+			zone.removeClass("is-dragging");
+			void this.upload(Array.from(event.dataTransfer?.files ?? []));
+		});
+	}
+
+	private async upload(files: readonly File[]): Promise<void> {
+		const exam = this.exam;
+		for (const file of files) {
+			if (attachmentKind(file.name) === null) {
+				new Notice(`${file.name} is not a PDF or an image, so it was not attached.`);
+				continue;
+			}
+			try {
+				const name = await this.plugin.attachments.add(exam.id, file.name, await file.arrayBuffer(), exam.attachments ?? []);
+				exam.attachments = [...(exam.attachments ?? []), name];
+			} catch (error) {
+				console.error("Examiner: could not attach a file", error);
+				new Notice(error instanceof AttachmentError ? error.message : `Could not attach ${file.name}.`);
+			}
+		}
+		if (exam !== this.exam) return;
+		this.renderAttachments();
+		this.updateActions();
+	}
+
+	private async discardUploads(): Promise<void> {
+		const saved = this.plugin.exams.get(this.exam.id);
+		await this.plugin.attachments.prune(this.exam.id, saved?.attachments ?? []).catch((error: unknown) => {
+			console.error("Examiner: could not tidy up unsaved reference materials", error);
+		});
+	}
+
 	private async discard(): Promise<void> {
 		if (!(await this.confirmDiscard())) return;
+		await this.discardUploads();
 		this.loadExam(this.isNew ? null : this.exam.id);
 		this.render();
 	}
 
 	private async save(): Promise<void> {
+		if (this.saving) return;
 		const exam: ExamDefinition = { ...structuredClone(this.exam), title: this.exam.title.trim() };
 		if (hasErrors(validateExam(exam))) {
 			this.renderIssues();
@@ -416,14 +509,17 @@ export class ExamEditorView extends ItemView {
 		}
 		this.saving = true;
 		try {
-			if (this.isNew || !this.plugin.exams.get(exam.id)) await this.plugin.exams.create(exam);
-			else await this.plugin.exams.save(exam);
+			if (this.plugin.exams.pathOf(exam.id) !== undefined) await this.plugin.exams.save(exam);
+			else await this.plugin.exams.create(exam);
 		} catch (error) {
 			new Notice(`Could not save the exam: ${error instanceof Error ? error.message : String(error)}`);
 			return;
 		} finally {
 			this.saving = false;
 		}
+		await this.plugin.attachments.prune(exam.id, exam.attachments ?? []).catch((error: unknown) => {
+			console.error("Examiner: could not tidy up removed reference materials", error);
+		});
 		new Notice(`Saved "${exam.title}".`);
 		this.exam = exam;
 		this.baseline = JSON.stringify(exam);

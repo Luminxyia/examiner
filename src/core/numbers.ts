@@ -18,6 +18,12 @@ export function formatNumber(value: number): string {
 	return text.replace("e+", "e");
 }
 
+export function formatScientific(value: number): string {
+	if (value === 0 || !Number.isFinite(value)) return formatNumber(value);
+	const [mantissa, exponent] = Number(value.toPrecision(10)).toExponential().split("e") as [string, string];
+	return `${mantissa} × 10^${Number(exponent)}`;
+}
+
 export function formatFixed(value: number, places: number): string {
 	const rounded = roundToPlaces(value, places);
 	return (rounded === 0 ? 0 : rounded).toFixed(places);
@@ -25,18 +31,22 @@ export function formatFixed(value: number, places: number): string {
 
 const NUMBER_INPUT_PATTERN = /^[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?$/;
 
+const POWER_OF_TEN_PATTERN = /^([+-]?(?:\d+\.?\d*|\.\d+))[*×xX·]10\^\(?([+-]?\d+)\)?$/;
+
 export type NumberInput = { ok: true; value: number } | { ok: false; message: string };
 
 export function parseNumberInput(text: string): NumberInput {
-	const normalised = text.trim().replace(/^[−–]/, "-").replace(/\s+/g, "");
+	const normalised = text.trim().replace(/[−–]/g, "-").replace(/\s+/g, "");
 	if (normalised === "") return { ok: false, message: "Enter a number." };
 	if (/^[+-]?\d+,\d+$/.test(normalised)) {
 		return { ok: false, message: "Use a full stop as the decimal separator, for example 3.5." };
 	}
-	if (!NUMBER_INPUT_PATTERN.test(normalised)) {
+	const powerOfTen = POWER_OF_TEN_PATTERN.exec(normalised);
+	const literal = powerOfTen ? `${powerOfTen[1] ?? ""}e${powerOfTen[2] ?? ""}` : normalised;
+	if (!NUMBER_INPUT_PATTERN.test(literal)) {
 		return { ok: false, message: `"${text.trim()}" is not a number.` };
 	}
-	const value = Number(normalised);
+	const value = Number(literal);
 	if (!Number.isFinite(value)) return { ok: false, message: "That number is too large." };
 	return { ok: true, value };
 }

@@ -1271,6 +1271,12 @@ button.examiner-judgement.is-active {
 	font-size: var(--font-ui-medium);
 }
 
+.examiner-question-table .examiner-col-type {
+	width: 7rem;
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+}
+
 .examiner-question-table .examiner-col-count {
 	width: 6rem;
 }
@@ -1947,4 +1953,120 @@ button.examiner-show-more {
 
 .examiner-next-step > .examiner-header-actions {
 	margin-top: var(--size-2-3);
+}
+
+.examiner-checkbox-field {
+	display: flex;
+	align-items: center;
+	gap: var(--size-2-3);
+	font-size: var(--font-ui-small);
+	cursor: pointer;
+}
+
+.examiner-checkbox-field input[type="checkbox"] {
+	margin: 0;
+}
+
+.examiner-attachments {
+	display: flex;
+	flex-direction: column;
+	gap: var(--size-2-3);
+}
+
+.examiner-attachment-list {
+	border-top: var(--border-width) solid var(--background-modifier-border);
+}
+
+.examiner-attachment-row {
+	display: flex;
+	align-items: center;
+	gap: var(--size-2-3);
+	padding: var(--size-2-2) 0;
+	border-bottom: var(--border-width) solid var(--background-modifier-border);
+}
+
+.examiner-attachment-icon {
+	display: flex;
+	color: var(--icon-color);
+}
+
+.examiner-attachment-name {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.examiner-dropzone {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--size-2-3);
+	padding: var(--size-4-2) var(--size-4-3);
+	border: var(--border-width) dashed var(--background-modifier-border);
+}
+
+.examiner-dropzone.is-dragging {
+	border-color: var(--interactive-accent);
+	background-color: var(--background-modifier-hover);
+}
+
+.examiner-file-input {
+	display: none;
+}
+
+.examiner-exam-header-side {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: flex-end;
+	gap: var(--size-4-3);
+}
+
+.examiner-reference-modal {
+	display: flex;
+	flex-direction: column;
+	width: min(60rem, 95vw);
+	height: min(85vh, 60rem);
+}
+
+.examiner-reference-modal .modal-content {
+	display: flex;
+	flex: 1;
+	flex-direction: column;
+	gap: var(--size-4-2);
+	min-height: 0;
+	overflow: hidden;
+}
+
+.examiner-reference-nav {
+	display: flex;
+	flex-shrink: 0;
+	align-items: center;
+	justify-content: center;
+	gap: var(--size-4-3);
+}
+
+.examiner-reference-viewer {
+	display: flex;
+	flex: 1;
+	flex-direction: column;
+	align-items: center;
+	gap: var(--size-4-2);
+	min-height: 0;
+	overflow: auto;
+}
+
+.examiner-reference-image,
+.examiner-reference-page {
+	display: block;
+	max-width: 100%;
+	height: auto;
+}
+
+.examiner-reference-page {
+	width: 100%;
+	background-color: white;
 }

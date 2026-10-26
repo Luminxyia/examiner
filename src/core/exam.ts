@@ -24,6 +24,7 @@ export interface ExamDefinition {
 	timeLimitMinutes: number | null;
 	passingPercent: number;
 	questions: ExamQuestionRef[];
+	attachments?: string[];
 }
 
 interface ExamItemBase {
@@ -36,6 +37,7 @@ interface ExamItemBase {
 export interface CalculationItem extends ExamItemBase {
 	kind?: "calculation";
 	answerRule: AnswerRule;
+	scientific?: boolean;
 	instance: QuestionInstance;
 }
 
@@ -83,7 +85,12 @@ export function prepareExam(
 		}
 		try {
 			for (let i = 0; i < ref.count; i++) {
-				preparation.items.push({ ...base, answerRule: definition.answer, instance: generateInstance(definition, random) });
+				preparation.items.push({
+					...base,
+					answerRule: definition.answer,
+					...(definition.scientific ? { scientific: true } : {}),
+					instance: generateInstance(definition, random),
+				});
 			}
 		} catch (error) {
 			if (!(error instanceof GenerationError)) throw error;
@@ -204,7 +211,7 @@ export function markExam(
 			inputs: item.instance.inputs,
 			steps: item.instance.steps,
 			answer: item.instance.answer,
-			expectedDisplay: formatExpectedAnswer(item.answerRule, item.instance.answer),
+			expectedDisplay: formatExpectedAnswer(item.answerRule, item.instance.answer, item.scientific),
 			response,
 		};
 		if (unknown) return scored({ ...base, outcome: "unknown" });

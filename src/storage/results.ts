@@ -51,6 +51,7 @@ export interface ExamSession {
 	dontKnow?: boolean[];
 	current: number;
 	marking?: ExamMarking;
+	attachments?: string[];
 }
 
 export interface ExamMarking {

@@ -9,6 +9,7 @@ import { createId, fileKindOf } from "./storage/format-shared";
 import { DefinitionLibrary } from "./storage/library";
 import { parseQuestionFile, serializeQuestion } from "./storage/question-format";
 import { ResultsStore } from "./storage/results";
+import { AttachmentStore } from "./storage/attachments";
 import { LoadState } from "./storage/load-state";
 import { AdapterFolderFiles } from "./storage/plugin-files";
 import { AttemptView, VIEW_TYPE_ATTEMPT, type AttemptViewState } from "./ui/attempt-view";
@@ -27,6 +28,7 @@ export default class ExaminerPlugin extends Plugin {
 	questions!: DefinitionLibrary<QuestionDefinition>;
 	exams!: DefinitionLibrary<ExamDefinition>;
 	results!: ResultsStore;
+	attachments!: AttachmentStore;
 	private tracker!: StudyTracker;
 	private pendingStudyWrite: Promise<void> = Promise.resolve();
 	readonly loadState = new LoadState();
@@ -45,6 +47,7 @@ export default class ExaminerPlugin extends Plugin {
 		);
 		this.exams = new DefinitionLibrary(files, { kind: "exam", parse: parseExamFile, serialize: serializeExam }, `${pluginFolder}/exams`);
 		this.results = new ResultsStore(this.app.vault.adapter, pluginFolder);
+		this.attachments = new AttachmentStore(this.app.vault.adapter, `${pluginFolder}/attachments`);
 
 		this.registerView(VIEW_TYPE_QUESTION_EDITOR, (leaf) => new QuestionEditorView(leaf, this));
 		this.registerView(VIEW_TYPE_PRACTICE, (leaf) => new PracticeView(leaf, this));
@@ -254,6 +257,7 @@ export default class ExaminerPlugin extends Plugin {
 			["exam results and study history", () => this.results.clearAll()],
 			["exams", () => this.exams.clear()],
 			["questions", () => this.questions.clear()],
+			["reference materials", () => this.attachments.clear()],
 		];
 		for (const [label, run] of steps) {
 			try {
