@@ -17,6 +17,7 @@ export const KEYS = {
 	correctOption: "examiner-correct-option",
 	scientific: "examiner-scientific-notation",
 	attachments: "examiner-attachments",
+	shuffle: "examiner-randomize-order",
 	timeLimit: "examiner-time-limit",
 	passingGrade: "examiner-passing-grade",
 	questions: "examiner-questions",

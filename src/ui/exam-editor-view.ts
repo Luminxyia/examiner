@@ -222,6 +222,14 @@ export class ExamEditorView extends ItemView {
 		});
 		this.passingIssuesEl = details.createDiv({ cls: "examiner-field-issues" });
 
+		new Setting(details).setName("Randomize question order").addToggle((toggle) =>
+			toggle.setValue(this.exam.shuffle === true).onChange((value) => {
+				if (value) this.exam.shuffle = true;
+				else delete this.exam.shuffle;
+				this.updateActions();
+			}),
+		);
+
 		details.createDiv({ cls: "examiner-section-title", text: "Reference materials" });
 		this.attachmentsEl = details.createDiv({ cls: "examiner-attachments" });
 		this.renderAttachments();

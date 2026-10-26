@@ -1659,27 +1659,27 @@ button.examiner-row-score:focus-visible,
 	flex-shrink: 0;
 }
 
-.examiner-variable-row {
+.examiner-draggable-row {
 	position: relative;
 }
 
-.examiner-variable-row .examiner-drag-handle {
+.examiner-draggable-row .examiner-drag-handle {
 	flex-shrink: 0;
 	align-self: center;
 	cursor: grab;
 	touch-action: none;
 }
 
-.examiner-variable-row .examiner-drag-handle:active {
+.examiner-draggable-row .examiner-drag-handle:active {
 	cursor: grabbing;
 }
 
-.examiner-variable-row.is-dragging {
+.examiner-draggable-row.is-dragging {
 	opacity: 0.4;
 }
 
-.examiner-variable-row.is-drop-before::before,
-.examiner-variable-row.is-drop-after::after {
+.examiner-draggable-row.is-drop-before::before,
+.examiner-draggable-row.is-drop-after::after {
 	position: absolute;
 	right: 0;
 	left: 0;
@@ -1689,11 +1689,11 @@ button.examiner-row-score:focus-visible,
 	pointer-events: none;
 }
 
-.examiner-variable-row.is-drop-before::before {
+.examiner-draggable-row.is-drop-before::before {
 	top: calc(-1 * var(--size-2-2));
 }
 
-.examiner-variable-row.is-drop-after::after {
+.examiner-draggable-row.is-drop-after::after {
 	bottom: calc(-1 * var(--size-2-2));
 }
 

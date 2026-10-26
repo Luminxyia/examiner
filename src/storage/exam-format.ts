@@ -56,6 +56,7 @@ export function parseExamFile(content: string): ParseResult<ExamDefinition> {
 			passingPercent: passingPercent ?? LEGACY_PASSING_PERCENT,
 			questions,
 			...(attachments.length > 0 ? { attachments } : {}),
+			...(data[KEYS.shuffle] === true ? { shuffle: true } : {}),
 		},
 	};
 }
@@ -82,6 +83,7 @@ export function serializeExam(exam: ExamDefinition, previousContent?: string): s
 		[KEYS.passingGrade]: exam.passingPercent,
 		[KEYS.questions]: exam.questions.map((ref) => ({ id: ref.questionId, count: ref.count })),
 		[KEYS.attachments]: exam.attachments && exam.attachments.length > 0 ? exam.attachments : undefined,
+		[KEYS.shuffle]: exam.shuffle ? true : undefined,
 	};
 	const body = previous?.ok ? previous.body : "";
 	return composeFile(managed, body, previous?.ok ? previous.data : {});

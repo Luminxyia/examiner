@@ -1,5 +1,6 @@
 import type { FlashcardMode, QuestionDefinition } from "./definition";
 import type { RandomSource } from "./generate";
+import { shuffled } from "./random";
 
 export type Judgement = "correct" | "partial" | "incorrect";
 
@@ -15,11 +16,10 @@ export function drawFlashcard(definition: QuestionDefinition, random: RandomSour
 	const { flashcard } = definition;
 	const card = { prompt: definition.prompt, mode: flashcard.mode, answer: flashcard.answer, options: [] as string[], correct: 0 };
 	if (flashcard.mode !== "choice") return card;
-	const order = flashcard.options.map((_option, index) => index);
-	for (let i = order.length - 1; i > 0; i--) {
-		const j = Math.floor(random() * (i + 1));
-		[order[i], order[j]] = [order[j] ?? j, order[i] ?? i];
-	}
+	const order = shuffled(
+		flashcard.options.map((_option, index) => index),
+		random,
+	);
 	card.options = order.map((index) => flashcard.options[index] ?? "");
 	card.correct = order.indexOf(flashcard.correct);
 	return card;

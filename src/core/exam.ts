@@ -11,6 +11,7 @@ import {
 import { awardedMarks, chosenOption, drawFlashcard, expectedFlashcardAnswer, type Judgement } from "./flashcard";
 import { GenerationError, generateInstance, type QuestionInstance, type RandomSource, type StepResult } from "./generate";
 import { parseNumberInput } from "./numbers";
+import { shuffled } from "./random";
 
 export interface ExamQuestionRef {
 	questionId: string;
@@ -25,6 +26,7 @@ export interface ExamDefinition {
 	passingPercent: number;
 	questions: ExamQuestionRef[];
 	attachments?: string[];
+	shuffle?: boolean;
 }
 
 interface ExamItemBase {
@@ -97,6 +99,7 @@ export function prepareExam(
 			preparation.unusable.push({ title: definition.title, reason: error.message });
 		}
 	}
+	if (exam.shuffle) preparation.items = shuffled(preparation.items, random);
 	return preparation;
 }
 

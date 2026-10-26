@@ -120,7 +120,7 @@ export class QuestionEditorView extends ItemView {
 	private readonly collapsed = new Set<string>();
 	private pendingQuestionId: string | null = null;
 	private pendingNew = false;
-	private draggedVariable: number | null = null;
+	private dragging: { list: unknown[]; index: number } | null = null;
 
 	private formRendered = false;
 	private previewToken = 0;
@@ -554,7 +554,7 @@ export class QuestionEditorView extends ItemView {
 	private renderVariableRow(parent: HTMLElement, variable: InputVariable, index: number): void {
 		const path = `variables.${index}`;
 		const row = parent.createDiv({ cls: "examiner-row examiner-variable-row" });
-		this.makeDraggable(row, index);
+		this.makeDraggable(row, this.draft.variables, index, "variable");
 		const fields = row.createDiv({ cls: "examiner-row-fields" });
 
 		const nameField = fields.createEl("label", { cls: "examiner-field" });
@@ -584,15 +584,16 @@ export class QuestionEditorView extends ItemView {
 			}
 		}
 
-		this.rowActions(row, this.draft.variables, index, "variable", false);
+		this.rowActions(row, this.draft.variables, index, "variable");
 		this.slot(parent, path);
 	}
 
-	private makeDraggable(row: HTMLElement, index: number): void {
-		const label = `Drag to reorder variable ${index + 1}`;
+	private makeDraggable<T>(row: HTMLElement, list: T[], index: number, noun: string): void {
+		row.addClass("examiner-draggable-row");
+		const label = `Drag to reorder ${noun} ${index + 1}`;
 		const handle = row.createEl("button", {
 			cls: "clickable-icon examiner-drag-handle",
-			attr: { "aria-label": `${label}, or use the arrow keys`, "data-variable-index": String(index) },
+			attr: { "aria-label": `${label}, or use the arrow keys`, "data-drag-handle": `${noun}-${index}` },
 		});
 		setIcon(handle, "grip-vertical");
 		setTooltip(handle, label);
@@ -614,58 +615,58 @@ export class QuestionEditorView extends ItemView {
 		handle.addEventListener("keydown", (event) => {
 			const offset = event.key === "ArrowUp" ? -1 : event.key === "ArrowDown" ? 1 : 0;
 			const target = index + offset;
-			if (offset === 0 || target < 0 || target >= this.draft.variables.length) return;
+			if (offset === 0 || target < 0 || target >= list.length) return;
 			event.preventDefault();
-			this.moveVariable(index, target);
-			this.formEl.querySelector<HTMLElement>(`[data-variable-index="${target}"]`)?.focus();
+			this.moveItem(list, index, target);
+			this.formEl.querySelector<HTMLElement>(`[data-drag-handle="${noun}-${target}"]`)?.focus();
 		});
 		row.addEventListener("dragstart", (event) => {
 			if (!row.draggable) {
 				event.preventDefault();
 				return;
 			}
-			this.draggedVariable = index;
+			this.dragging = { list, index };
 			event.dataTransfer?.setData("text/plain", String(index));
 			if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
 			row.addClass("is-dragging");
 		});
 		row.addEventListener("dragover", (event) => {
-			if (this.draggedVariable === null) return;
+			if (this.dragging?.list !== list) return;
 			event.preventDefault();
 			if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
 			const after = dropAfter(event);
 			clearDropMarks();
-			if (this.draggedVariable !== index) row.addClass(after ? "is-drop-after" : "is-drop-before");
+			if (this.dragging.index !== index) row.addClass(after ? "is-drop-after" : "is-drop-before");
 		});
 		row.addEventListener("dragleave", (event) => {
 			if (!row.contains(event.relatedTarget as Node | null)) row.removeClass("is-drop-before", "is-drop-after");
 		});
 		row.addEventListener("drop", (event) => {
-			const from = this.draggedVariable;
-			if (from === null) return;
+			if (this.dragging?.list !== list) return;
+			const from = this.dragging.index;
 			event.preventDefault();
 			clearDropMarks();
-			this.draggedVariable = null;
+			this.dragging = null;
 			let to = index + (dropAfter(event) ? 1 : 0);
 			if (from < to) to--;
-			if (from !== to) this.moveVariable(from, to);
+			if (from !== to) this.moveItem(list, from, to);
 		});
 		row.addEventListener("dragend", () => {
-			this.draggedVariable = null;
+			this.dragging = null;
 			row.draggable = false;
 			row.removeClass("is-dragging");
 			clearDropMarks();
 		});
 	}
 
-	private moveVariable(from: number, to: number): void {
-		const [variable] = this.draft.variables.splice(from, 1);
-		if (!variable) return;
-		this.draft.variables.splice(to, 0, variable);
+	private moveItem<T>(list: T[], from: number, to: number): void {
+		const [item] = list.splice(from, 1);
+		if (item === undefined) return;
+		list.splice(to, 0, item);
 		this.changed(true);
 	}
 
-	private rowActions<T>(row: HTMLElement, list: T[], index: number, noun: string, movable = true): void {
+	private rowActions<T>(row: HTMLElement, list: T[], index: number, noun: string): void {
 		const actions = row.createDiv({ cls: "examiner-row-actions" });
 		const action = (icon: string, label: string, disabled: boolean, run: () => void) => {
 			const button = actions.createEl("button", { cls: "clickable-icon", attr: { "aria-label": label } });
@@ -677,15 +678,6 @@ export class QuestionEditorView extends ItemView {
 				this.changed(true);
 			});
 		};
-		const swap = (other: number) => {
-			const item = list[index];
-			list[index] = list[other];
-			list[other] = item;
-		};
-		if (movable) {
-			action("arrow-up", `Move ${noun} up`, index === 0, () => swap(index - 1));
-			action("arrow-down", `Move ${noun} down`, index === list.length - 1, () => swap(index + 1));
-		}
 		action("x", `Remove ${noun}`, false, () => list.splice(index, 1));
 	}
 
@@ -694,6 +686,7 @@ export class QuestionEditorView extends ItemView {
 		this.draft.steps.forEach((step, index) => {
 			const path = `steps.${index}`;
 			const row = body.createDiv({ cls: "examiner-row examiner-step" });
+			this.makeDraggable(row, this.draft.steps, index, "step");
 			row.createSpan({ cls: "examiner-step-number", text: String(index + 1) });
 			const fields = row.createDiv({ cls: "examiner-row-fields examiner-step-fields" });
 			const targetWrap = fields.createDiv({ cls: "examiner-braced" });
@@ -923,15 +916,8 @@ export class QuestionEditorView extends ItemView {
 		renderWorking(box, workedSteps(instance), true);
 
 		const probe = probeDefinition(definition);
-		if (probe) {
-			const percent = Math.round(probe.failureRate * 100);
-			box.createDiv({
-				cls: "examiner-warning-text",
-				text:
-					probe.failureRate >= 1
-						? `No generated values work. ${probe.example.message}`
-						: `About ${Math.max(percent, 1)}% of generated values make a step fail (${probe.example.message}). Those values are drawn again automatically.`,
-			});
+		if (probe && probe.failureRate >= 1) {
+			box.createDiv({ cls: "examiner-warning-text", text: `No generated values work. ${probe.example.message}` });
 		}
 		el.replaceChildren(box);
 	}
