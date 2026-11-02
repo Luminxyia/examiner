@@ -2,6 +2,8 @@
 
 An exam generator that allows you to create practice problems with random variables to generate novel problems from those parameters.
 
+<img width="1332" height="529" alt="image" src="https://github.com/user-attachments/assets/16631d36-a71c-4431-91ee-ce59363e272f" />
+
 <img width="1130" height="948" alt="image" src="https://github.com/user-attachments/assets/24b995b0-570f-4a50-8373-96a03c9416e5" />
 
 # How it works
