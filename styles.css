@@ -28,7 +28,9 @@
 }
 
 .examiner-view.examiner-exams,
-.examiner-view.examiner-overview {
+.examiner-view.examiner-overview,
+.examiner-view.examiner-tutor,
+.examiner-view.examiner-questions {
 	padding: var(--size-4-4) var(--size-4-5);
 }
 
@@ -125,6 +127,24 @@ input.examiner-invalid {
 	display: flex;
 	flex-direction: column;
 	gap: var(--size-2-1);
+}
+
+.examiner-section-nav {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--size-2-2);
+}
+
+.examiner-section-nav button {
+	background-color: transparent;
+	box-shadow: none;
+	color: var(--text-muted);
+}
+
+.examiner-section-nav button.is-active {
+	background-color: var(--background-modifier-hover);
+	color: var(--text-normal);
+	font-weight: var(--font-semibold);
 }
 
 .examiner-header-actions,
@@ -599,8 +619,6 @@ button.examiner-judgement.is-active {
 	display: flex;
 	flex-wrap: wrap;
 	gap: var(--size-2-3) var(--size-4-5);
-	color: var(--text-muted);
-	font-size: var(--font-ui-small);
 }
 
 .examiner-legend-item {
@@ -1566,6 +1584,11 @@ button.examiner-row-score:focus-visible,
 .examiner-status-label {
 	color: var(--text-muted);
 	font-size: var(--font-ui-smaller);
+}
+
+.examiner-review-item .examiner-status-label {
+	color: var(--text-normal);
+	font-size: inherit;
 }
 
 .examiner-grade-grid {

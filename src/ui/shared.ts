@@ -1,4 +1,4 @@
-import { MarkdownRenderer, Modal, setIcon, Setting, setTooltip, type App, type Component } from "obsidian";
+import { MarkdownRenderer, Modal, setIcon, Setting, setTooltip, type App, type Component, type WorkspaceLeaf } from "obsidian";
 import type ExaminerPlugin from "../main";
 
 export async function renderMarkdown(app: App, container: HTMLElement, markdown: string, component: Component): Promise<void> {
@@ -115,6 +115,46 @@ class ConfirmModal extends Modal {
 		this.contentEl.empty();
 		this.resolve(this.confirmed);
 	}
+}
+
+export type ExaminerSection = "overview" | "tutor" | "exams" | "questions";
+
+const SECTIONS: { id: ExaminerSection; label: string }[] = [
+	{ id: "overview", label: "Overview" },
+	{ id: "tutor", label: "Tutor" },
+	{ id: "exams", label: "Exams" },
+	{ id: "questions", label: "Questions" },
+];
+
+export function renderSectionNav(parent: HTMLElement, plugin: ExaminerPlugin, leaf: WorkspaceLeaf, current: ExaminerSection): void {
+	const nav = parent.createEl("nav", { cls: "examiner-section-nav" });
+	for (const section of SECTIONS) {
+		const button = nav.createEl("button", { text: section.label });
+		if (section.id === current) {
+			button.addClass("is-active");
+			button.setAttribute("aria-current", "page");
+			continue;
+		}
+		button.addEventListener("click", () => void plugin.showSection(leaf, section.id));
+	}
+}
+
+export function renderStudyTimerButton(parent: HTMLElement, plugin: ExaminerPlugin): HTMLButtonElement {
+	const button = textButton(parent, "");
+	button.addEventListener("click", () => void plugin.toggleStudyTimer());
+	updateStudyTimerButton(button, plugin);
+	return button;
+}
+
+export function updateStudyTimerButton(button: HTMLButtonElement, plugin: ExaminerPlugin): void {
+	const startedAt = plugin.studyTimerStartedAt;
+	button.toggleClass("mod-cta", startedAt !== null);
+	if (startedAt === null) {
+		button.setText("Start study timer");
+		return;
+	}
+	const elapsedSeconds = Math.max(0, Math.floor((Date.now() - startedAt) / 1000));
+	button.setText(`Stop study timer · ${formatClock(elapsedSeconds)}`);
 }
 
 export function formatClock(totalSeconds: number): string {

@@ -213,10 +213,8 @@ export function renderStudyHeatmap(parent: HTMLElement, daily: ReadonlyMap<strin
 	const wrapper = parent.createDiv({ cls: "examiner-heatmap" });
 	const scroller = wrapper.createDiv({ cls: "examiner-heatmap-scroll" });
 	const inner = scroller.createDiv({ cls: "examiner-heatmap-inner" });
-	const grid = inner.createDiv({ cls: "examiner-heatmap-grid", attr: { role: "img" } });
+	const grid = inner.createDiv({ cls: "examiner-heatmap-grid" });
 	grid.setCssProps({ "--examiner-weeks": String(weeks) });
-	let total = 0;
-	let activeDays = 0;
 
 	const months = grid.createDiv({ cls: "examiner-heatmap-months" });
 	let lastMonth = -1;
@@ -244,14 +242,10 @@ export function renderStudyHeatmap(parent: HTMLElement, daily: ReadonlyMap<strin
 			continue;
 		}
 		const ms = daily.get(localDayKey(date)) ?? 0;
-		total += ms;
-		if (ms > 0) activeDays++;
 		cell.addClass(`is-level-${heatmapLevel(ms)}`);
 		const label = `${date.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short", year: "numeric" })}: ${ms > 0 ? formatDuration(ms) : "no study"}`;
-		cell.setAttribute("aria-label", label);
-		setTooltip(cell, label);
+		cell.setAttribute("title", label);
 	}
-	grid.setAttribute("aria-label", `Daily study time: ${activeDays} active ${activeDays === 1 ? "day" : "days"}, ${formatDuration(total)} in total.`);
 
 	const legend = inner.createDiv({ cls: "examiner-heatmap-legend", attr: { "aria-hidden": "true" } });
 	legend.createSpan({ text: "Less" });

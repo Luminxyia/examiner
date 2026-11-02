@@ -1,4 +1,4 @@
-import { DropdownComponent, ItemView, Notice, setIcon, type WorkspaceLeaf } from "obsidian";
+import { DropdownComponent, ItemView, setIcon, type WorkspaceLeaf } from "obsidian";
 import {
 	attemptedExams,
 	compareWithYesterday,
@@ -14,48 +14,22 @@ import {
 	type ScoreTrend,
 	type StudyOverview,
 } from "../core/statistics";
-import { DEFAULT_PASSING_PERCENT, type ExamDefinition } from "../core/exam";
-import {
-	aggregateMistakes,
-	aggregateTopics,
-	describeMisses,
-	isRepeated,
-	recommendNext,
-	selectTargetedQuestions,
-	studyPriorities,
-	type ExamPriority,
-	type MistakeEntry,
-	type PriorityStatus,
-	type Recommendation,
-	type RecommendedAction,
-	type TargetCandidate,
-} from "../core/insights";
-
 import type ExaminerPlugin from "../main";
-import { createId } from "../storage/format-shared";
-import { toAttemptSummary, type ExamResultRecord } from "../storage/results";
+import { toAttemptSummary } from "../storage/results";
 import { GradeChart, gradePoints, renderStudyHeatmap } from "./charts";
-import { GradeHistoryModal } from "./grade-history-modal";
-import { MistakeReviewModal } from "./mistake-review-modal";
-import { startExam } from "./start-exam";
-import { formatClock, formatDateTime, formatPercent, formatScore, renderEmptyState, section, textButton } from "./shared";
+import {
+	formatDateTime,
+	formatPercent,
+	formatScore,
+	renderEmptyState,
+	renderSectionNav,
+	renderStudyTimerButton,
+	section,
+	textButton,
+	updateStudyTimerButton,
+} from "./shared";
 
 export const VIEW_TYPE_OVERVIEW = "examiner-overview";
-
-const STATUS_LABELS: Record<PriorityStatus, string> = {
-	"needs-attention": "Needs attention",
-	"room-to-improve": "Room to improve",
-	"performing-well": "Performing well",
-	"not-enough-evidence": "Not enough evidence yet",
-};
-
-const ACTION_LABELS: Record<RecommendedAction, string> = {
-	"review-mistakes": "Review mistakes",
-	"retry-exam": "Retry exam",
-	"create-exam": "Create exam",
-	"open-exams": "Open exams",
-	"new-exam": "New exam",
-};
 
 const HISTORY_FILTERS: Record<HistoryFilter, string> = {
 	all: "All exams",
@@ -68,11 +42,9 @@ export class OverviewView extends ItemView {
 	private chosenExamId: string | null = null;
 	private chart: GradeChart | null = null;
 	private gradePicker: DropdownComponent | null = null;
-	private gradeBlock: HTMLElement | null = null;
 	private gradeAttempts: readonly AttemptSummary[] = [];
 	private historyFilter: HistoryFilter = "all";
 	private readonly expandedExams = new Set<string>();
-	private showAllMistakes = false;
 	private timerButton: HTMLButtonElement | null = null;
 
 	constructor(
@@ -106,20 +78,15 @@ export class OverviewView extends ItemView {
 		const token = ++this.renderToken;
 		const root = createDiv({ cls: "examiner-exams-body" });
 		const header = root.createDiv({ cls: "examiner-page-header" });
-		const headingRow = header.createDiv({ cls: "examiner-header-actions" });
-		this.timerButton = textButton(headingRow, "");
-		this.timerButton.addEventListener("click", () => void this.plugin.toggleStudyTimer());
-		this.updateTimerButton();
-		headingRow.createEl("h2", { cls: "examiner-heading", text: "Study overview" });
-		textButton(header, "Go to exams").addEventListener("click", () => void this.plugin.openExams());
+		renderSectionNav(header, this.plugin, this.leaf, "overview");
+		const actions = header.createDiv({ cls: "examiner-header-actions" });
+		this.timerButton = renderStudyTimerButton(actions, this.plugin);
 
 		const now = new Date();
 		let overview: StudyOverview;
 		let attempts: AttemptSummary[];
-		let records: ExamResultRecord[];
 		try {
 			const [sessions, results] = await Promise.all([this.plugin.results.readStudySessions(), this.plugin.results.readExamResults()]);
-			records = results;
 			attempts = results.map(toAttemptSummary);
 			overview = summariseStudy(sessions, attempts, now);
 		} catch (error) {
@@ -136,31 +103,19 @@ export class OverviewView extends ItemView {
 			this.renderEmpty(root);
 		} else {
 			this.renderToday(root, overview);
+			if (overview.totalStudyMs > 0) renderStudyHeatmap(section(root, "Focused study per day"), overview.daily, now);
 			const groups = groupAttemptsByExam(attempts, (examId) => this.plugin.exams.get(examId)?.title);
-			const mistakes = aggregateMistakes(records, now);
-			const priorities = studyPriorities(groups, records, (examId) => this.passingPercent(examId), now);
-			const columns = root.createDiv({ cls: "examiner-overview-columns" });
-			this.renderHistory(columns, groups);
-			this.renderGrades(columns, attempts);
-			this.renderNextStep(root, recommendNext(priorities, mistakes, this.plugin.exams.definitions().length > 0));
-			this.renderPriorities(root, priorities, mistakes);
-			renderStudyHeatmap(section(root, "Focused study per day"), overview.daily, now);
-			this.renderMistakes(root, mistakes);
+			if (attempts.length > 0) {
+				const columns = root.createDiv({ cls: "examiner-overview-columns" });
+				this.renderHistory(columns, groups);
+				this.renderGrades(columns, attempts);
+			}
 		}
 		this.contentEl.replaceChildren(root);
 	}
 
 	private updateTimerButton(): void {
-		const button = this.timerButton;
-		if (!button) return;
-		const startedAt = this.plugin.studyTimerStartedAt;
-		button.toggleClass("mod-cta", startedAt !== null);
-		if (startedAt === null) {
-			button.setText("Start studying");
-			return;
-		}
-		const elapsedSeconds = Math.max(0, Math.floor((Date.now() - startedAt) / 1000));
-		button.setText(`Stop studying · ${formatClock(elapsedSeconds)}`);
+		if (this.timerButton) updateStudyTimerButton(this.timerButton, this.plugin);
 	}
 
 	override async onClose(): Promise<void> {
@@ -216,7 +171,6 @@ export class OverviewView extends ItemView {
 			picker.selectEl.setAttribute("aria-label", "Exam");
 			for (const exam of exams) picker.addOption(exam.examId, this.examTitle(exam.examId, exam.title));
 		});
-		this.gradeBlock = block;
 		if (!picker || selected === undefined) return;
 		const dropdown: DropdownComponent = picker;
 		this.gradePicker = dropdown;
@@ -269,16 +223,9 @@ export class OverviewView extends ItemView {
 				else this.expandedExams.delete(group.examId);
 			});
 			const summary = details.createEl("summary");
+			summary.addEventListener("click", () => this.showGrades(group.examId, true));
 			const main = summary.createDiv({ cls: "examiner-row-main" });
-			const title = main.createEl("button", {
-				cls: "examiner-link-button examiner-row-title",
-				text: group.title || "Untitled exam",
-				attr: { "aria-label": `${group.title || "Untitled exam"}: open the performance breakdown` },
-			});
-			title.addEventListener("click", (event) => {
-				event.preventDefault();
-				this.openBreakdown(group);
-			});
+			main.createDiv({ cls: "examiner-row-title", text: group.title || "Untitled exam" });
 			const count = group.attempts.length;
 			main.createDiv({
 				cls: "examiner-row-meta",
@@ -302,163 +249,6 @@ export class OverviewView extends ItemView {
 			}
 		}
 	}
-
-	private renderPriorities(root: HTMLElement, priorities: readonly ExamPriority[], mistakes: readonly MistakeEntry[]): void {
-		const block = section(root, "Your study priorities");
-		if (priorities.length === 0) return;
-		const topics = aggregateTopics(mistakes.filter((mistake) => isRepeated(mistake) && !mistake.correctSinceLastMiss)).slice(0, 5);
-		if (topics.length > 0) {
-			const line = block.createDiv({ cls: "examiner-topic-line" });
-			line.createSpan({ cls: "examiner-muted examiner-small", text: "Topics missed in several attempts:" });
-			for (const topic of topics) line.createSpan({ cls: "examiner-tag", text: topic.tag });
-		}
-		const list = block.createDiv({ cls: "examiner-priorities" });
-		const candidates = this.targetCandidates();
-		for (const priority of priorities.slice(0, 6)) this.renderPriority(list, priority, candidates);
-	}
-
-	private targetCandidates(): TargetCandidate[] {
-		return this.plugin.usableQuestions().map((question) => ({ id: question.id, tags: question.tags, title: question.title }));
-	}
-
-	private renderPriority(parent: HTMLElement, priority: ExamPriority, candidates: readonly TargetCandidate[]): void {
-		const item = parent.createDiv({ cls: "examiner-priority" });
-		const head = item.createDiv({ cls: "examiner-priority-head" });
-		head.createSpan({ cls: "examiner-row-title", text: priority.title || "Untitled exam" });
-		item.createDiv({ cls: "examiner-status-label", text: STATUS_LABELS[priority.status] });
-
-		item.createDiv({ cls: "examiner-row-meta", text: `Latest attempt: ${formatPercent(priority.latest.percent)}` });
-		for (const reason of priority.reasons) item.createDiv({ cls: "examiner-row-meta", text: reason });
-
-		const actionRow = item.createDiv({ cls: "examiner-priority-action" });
-		const exam = this.plugin.exams.get(priority.examId);
-		const unresolved = priority.mistakes.filter((mistake) => !mistake.correctSinceLastMiss);
-		const buttons = actionRow.createDiv({ cls: "examiner-priority-buttons" });
-		if (priority.action === "review-mistakes") {
-			textButton(buttons, "Review mistakes").addEventListener("click", () => this.reviewMistakes(unresolved));
-		}
-		const pair = buttons.createDiv({ cls: "examiner-priority-pair" });
-		const tailored = textButton(pair, "Create tailored exam");
-		const canTailor = selectTargetedQuestions(priority.mistakes, candidates).questionIds.length > 0;
-		tailored.disabled = !canTailor;
-		tailored.setAttribute(
-			"aria-label",
-			canTailor ? `Create an exam from the questions you got wrong in ${priority.title || "this exam"}` : "No questions you got wrong in this exam are available",
-		);
-		tailored.addEventListener("click", () => void this.createTargetedExam(priority.mistakes, priority.title));
-		const retry = textButton(pair, "Retry");
-
-		retry.disabled = !exam;
-		retry.setAttribute("aria-label", exam ? `Retry ${exam.title || "this exam"}` : "This exam has been deleted");
-		retry.addEventListener("click", () => {
-			if (exam) void startExam(this.plugin, exam);
-		});
-	}
-
-	private renderNextStep(root: HTMLElement, recommendation: Recommendation | null): void {
-		const block = section(root, "Continue studying");
-		if (!recommendation) return;
-		const next = block.createDiv({ cls: "examiner-next-step" });
-		next.createDiv({ cls: "examiner-row-title", text: recommendation.heading });
-		next.createDiv({ cls: "examiner-row-meta", text: recommendation.detail });
-		const exam = recommendation.examId === null ? undefined : this.plugin.exams.get(recommendation.examId);
-		const actions = recommendation.actions.filter((action) => action !== "retry-exam" || exam !== undefined);
-		if (actions.length === 0) return;
-		const row = next.createDiv({ cls: "examiner-header-actions" });
-		actions.forEach((action, index) => {
-			textButton(row, ACTION_LABELS[action], index === 0).addEventListener("click", () => {
-				switch (action) {
-					case "review-mistakes":
-						this.reviewMistakes(recommendation.mistakes);
-						break;
-					case "retry-exam":
-						if (exam) void startExam(this.plugin, exam);
-						break;
-					case "create-exam":
-						void this.createTargetedExam(recommendation.mistakes);
-						break;
-					case "open-exams":
-						void this.plugin.openExams();
-						break;
-					case "new-exam":
-						void this.plugin.editExam();
-						break;
-				}
-			});
-		});
-	}
-
-	private reviewMistakes(mistakes: readonly MistakeEntry[]): void {
-
-		if (mistakes.length > 0) new MistakeReviewModal(this.plugin, mistakes, 0).open();
-	}
-
-	private async createTargetedExam(mistakes: readonly MistakeEntry[], focus?: string): Promise<void> {
-		const selection = selectTargetedQuestions(mistakes, this.targetCandidates());
-		if (selection.questionIds.length === 0) {
-			new Notice("None of the questions you got wrong are still available. Retake one of your exams instead.");
-			return;
-		}
-		const date = new Date().toLocaleDateString(undefined, { dateStyle: "medium" });
-		const draft: ExamDefinition = {
-			id: createId("e"),
-			title: focus ? `${focus}: targeted practice` : `Targeted practice (${date})`,
-			tags: [],
-			timeLimitMinutes: null,
-			passingPercent: DEFAULT_PASSING_PERCENT,
-			questions: selection.questionIds.map((questionId) => ({ questionId, count: 1 })),
-		};
-		const parts = [`${selection.fromMistakes === 1 ? "1 question" : `${selection.fromMistakes} questions`} you got wrong`];
-		if (selection.fromTopics > 0) parts.push(`${selection.fromTopics} more on the same topics`);
-		new Notice(`Added ${parts.join(" and ")}. Review the exam, then save it to practice.`);
-		await this.plugin.editExamDraft(draft);
-	}
-
-	private renderMistakes(root: HTMLElement, mistakes: readonly MistakeEntry[]): void {
-
-		const count = mistakes.length;
-		const block = section(root, "Mistakes to revisit");
-		if (count === 0) return;
-		const topics = aggregateTopics(mistakes).slice(0, 6);
-		if (topics.length > 0) {
-			const line = block.createDiv({ cls: "examiner-topic-line" });
-			line.createSpan({ cls: "examiner-muted examiner-small", text: "By topic:" });
-			for (const topic of topics) {
-				line.createSpan({
-					cls: "examiner-tag",
-					text: `${topic.tag} (${topic.misses})`,
-					attr: { title: `${topic.questions === 1 ? "1 question" : `${topic.questions} questions`}, ${topic.misses === 1 ? "1 miss" : `${topic.misses} misses`}` },
-				});
-			}
-		}
-		const limit = 8;
-		const shown = this.showAllMistakes ? mistakes : mistakes.slice(0, limit);
-		const list = block.createDiv({ cls: "examiner-list" });
-		shown.forEach((mistake, index) => {
-			const row = list.createEl("button", { cls: "examiner-attempt-row examiner-mistake-row" });
-			const main = row.createDiv({ cls: "examiner-row-main" });
-			main.createDiv({ cls: "examiner-mistake-title", text: `${mistake.examTitle || "Untitled exam"} ${mistake.title || "Untitled question"}` });
-			main.createDiv({ cls: "examiner-row-meta", text: describeMisses(mistake) });
-			if (isRepeated(mistake)) row.createSpan({ cls: "examiner-status-label", text: "Repeated" });
-			row.addEventListener("click", () => new MistakeReviewModal(this.plugin, mistakes, index).open());
-		});
-		if (count > limit) {
-			const toggle = textButton(block, this.showAllMistakes ? "Show fewer" : `Show all ${count}`);
-			toggle.addClass("examiner-show-more");
-			toggle.addEventListener("click", () => {
-				this.showAllMistakes = !this.showAllMistakes;
-				void this.render();
-			});
-		}
-	}
-
-	private openBreakdown(group: ExamGroup): void {
-		this.showGrades(group.examId, true);
-		this.gradeBlock?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-		const history = [...group.attempts].reverse();
-
-		new GradeHistoryModal(this.plugin, group.title || "Untitled exam", history, this.passingPercent(group.examId)).open();
-	}
 }
 
 function renderTrend(parent: HTMLElement, trend: ScoreTrend): void {
@@ -469,19 +259,13 @@ function renderTrend(parent: HTMLElement, trend: ScoreTrend): void {
 		});
 		return;
 	}
-	const arrow = trend.points > 0 ? "↑" : "↓";
-	const text =
-		trend.points === 0 ? "No change" : trend.relative === null ? `${arrow} from 0%` : `${arrow} ${formatSignedPercent(trend.relative)}`;
-	const title =
-		trend.points === 0
-			? "Same score as the previous attempt"
-			: trend.relative === null
-				? "Up from 0% in the previous attempt, so a percentage change can't be calculated"
-				: `${Math.abs(trend.relative)}% ${trend.points > 0 ? "higher" : "lower"} than the previous attempt`;
+	let text = "No change";
+	if (trend.points !== 0) {
+		text = trend.relative === null ? "from 0%" : formatSignedPercent(trend.relative);
+	}
 	parent.createDiv({
 		cls: `examiner-row-meta examiner-trend ${trend.points > 0 ? "is-up" : trend.points < 0 ? "is-down" : ""}`,
 		text,
-		attr: { title },
 	});
 
 }

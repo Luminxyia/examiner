@@ -278,7 +278,7 @@ export class ExamEditorView extends ItemView {
 		iconAction(toolbar, "plus", "New exam").addEventListener("click", () => void this.openExam(null));
 
 		toolbar.createDiv({ cls: "examiner-spacer" });
-		textButton(toolbar, "Practice").addEventListener("click", () => void this.practice());
+		textButton(toolbar, "Start exam").addEventListener("click", () => void this.practice());
 		this.discardButton = textButton(toolbar, "Discard changes");
 		this.discardButton.addEventListener("click", () => void this.discard());
 		this.saveButton = textButton(toolbar, "Save exam", true);
@@ -289,11 +289,11 @@ export class ExamEditorView extends ItemView {
 
 	private async practice(): Promise<void> {
 		if (this.isNew) {
-			new Notice("Save the exam before practicing it.");
+			new Notice("Save the exam before starting it.");
 			return;
 		}
 		if (this.isDirty()) {
-			new Notice("Save your changes before practicing this exam.");
+			new Notice("Save your changes before starting this exam.");
 			return;
 		}
 		const exam = this.plugin.exams.get(this.exam.id);

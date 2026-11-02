@@ -1,4 +1,4 @@
-import { loadMathJax, normalizePath, Notice, Plugin, type ViewState } from "obsidian";
+import { loadMathJax, normalizePath, Notice, Plugin, type ViewState, type WorkspaceLeaf } from "obsidian";
 import { hasErrors, validateDefinition, type QuestionDefinition } from "./core/definition";
 import type { ExamDefinition } from "./core/exam";
 import { MIN_SESSION_MS, StudyTracker } from "./core/study-time";
@@ -24,6 +24,9 @@ import { ExaminerSettingTab } from "./ui/settings-tab";
 import { PracticeView, VIEW_TYPE_PRACTICE, type PracticeViewState } from "./ui/practice-view";
 import { QuestionEditorView, VIEW_TYPE_QUESTION_EDITOR, type EditorDraft, type QuestionEditorState } from "./ui/question-editor-view";
 import { QuestionPickerModal } from "./ui/question-picker";
+import { QuestionsView, VIEW_TYPE_QUESTIONS } from "./ui/questions-view";
+import { TutorView, VIEW_TYPE_TUTOR } from "./ui/tutor-view";
+import type { ExaminerSection } from "./ui/shared";
 
 export default class ExaminerPlugin extends Plugin {
 	override settings: ExaminerSettings = { ...DEFAULT_SETTINGS };
@@ -64,6 +67,10 @@ export default class ExaminerPlugin extends Plugin {
 		this.registerView(VIEW_TYPE_OVERVIEW, (leaf) => new OverviewView(leaf, this));
 		this.registerView(VIEW_TYPE_ATTEMPT, (leaf) => new AttemptView(leaf, this));
 		this.registerView(VIEW_TYPE_EXAM_EDITOR, (leaf) => new ExamEditorView(leaf, this));
+		this.registerView(VIEW_TYPE_QUESTIONS, (leaf) => new QuestionsView(leaf, this));
+		this.registerView(VIEW_TYPE_TUTOR, (leaf) => new TutorView(leaf, this));
+
+		this.addRibbonIcon("graduation-cap", "Examiner", () => void this.openOverview());
 
 		this.addCommand({
 			id: "open-question-editor",
@@ -401,6 +408,16 @@ export default class ExaminerPlugin extends Plugin {
 
 	async openOverview(): Promise<void> {
 		await this.openView({ type: VIEW_TYPE_OVERVIEW });
+	}
+
+	async showSection(leaf: WorkspaceLeaf, section: ExaminerSection): Promise<void> {
+		const types: Record<ExaminerSection, string> = {
+			overview: VIEW_TYPE_OVERVIEW,
+			tutor: VIEW_TYPE_TUTOR,
+			exams: VIEW_TYPE_EXAMS,
+			questions: VIEW_TYPE_QUESTIONS,
+		};
+		await leaf.setViewState({ type: types[section], active: true });
 	}
 
 	async openAttempt(attemptId: string): Promise<void> {

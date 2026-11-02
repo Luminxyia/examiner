@@ -1,16 +1,29 @@
-import { ItemView, type WorkspaceLeaf } from "obsidian";
+import { ItemView, Menu, type WorkspaceLeaf } from "obsidian";
 import { formatTimeLimit, pendingMarking, type ExamDefinition } from "../core/exam";
 import { numberAttempts, type NumberedAttempt } from "../core/statistics";
 import type ExaminerPlugin from "../main";
 import { toAttemptSummary, type ExamSession } from "../storage/results";
 import { GradeHistoryModal } from "./grade-history-modal";
 import { startExam } from "./start-exam";
-import { confirm, formatDateTime, formatPercent, iconAction, renderEmptyState, renderLoadState, renderTags, textButton } from "./shared";
+import {
+	confirm,
+	formatDateTime,
+	formatPercent,
+	iconAction,
+	renderEmptyState,
+	renderLoadState,
+	renderSectionNav,
+	renderStudyTimerButton,
+	renderTags,
+	textButton,
+	updateStudyTimerButton,
+} from "./shared";
 
 export const VIEW_TYPE_EXAMS = "examiner-exams";
 
 export class ExamsView extends ItemView {
 	private renderToken = 0;
+	private timerButton: HTMLButtonElement | null = null;
 
 	constructor(
 		leaf: WorkspaceLeaf,
@@ -37,6 +50,7 @@ export class ExamsView extends ItemView {
 		this.register(this.plugin.questions.onChange(() => void this.render()));
 		this.register(this.plugin.results.onChange(() => void this.render()));
 		this.register(this.plugin.loadState.onChange(() => void this.render()));
+		this.registerInterval(window.setInterval(() => this.updateTimerButton(), 1000));
 		await this.render();
 	}
 
@@ -47,9 +61,9 @@ export class ExamsView extends ItemView {
 
 		const root = createDiv({ cls: "examiner-exams-body" });
 		const header = root.createDiv({ cls: "examiner-page-header" });
-		header.createEl("h2", { cls: "examiner-heading", text: "Exams" });
+		renderSectionNav(header, this.plugin, this.leaf, "exams");
 		const actions = header.createDiv({ cls: "examiner-header-actions" });
-		textButton(actions, "Study overview").addEventListener("click", () => void this.plugin.openOverview());
+		this.timerButton = renderStudyTimerButton(actions, this.plugin);
 		const create = textButton(actions, "New exam", true);
 		create.addEventListener("click", () => void this.plugin.editExam());
 
@@ -71,6 +85,10 @@ export class ExamsView extends ItemView {
 		const list = root.createDiv({ cls: "examiner-list" });
 		for (const exam of exams) this.renderExam(list, exam, attempts.filter((attempt) => attempt.examId === exam.id));
 		this.contentEl.replaceChildren(root);
+	}
+
+	private updateTimerButton(): void {
+		if (this.timerButton) updateStudyTimerButton(this.timerButton, this.plugin);
 	}
 
 	private renderSessionBanner(parent: HTMLElement, session: ExamSession): void {
@@ -125,11 +143,8 @@ export class ExamsView extends ItemView {
 		main.createDiv({ cls: "examiner-row-meta", text: meta.join(", ") });
 		renderTags(main, exam.tags);
 
-		const result = row.createDiv({ cls: "examiner-row-result" });
-		const graph = iconAction(result, "trending-up", history.length === 0 ? "No attempts yet" : "Grade history");
-		graph.disabled = history.length === 0;
-		graph.addEventListener("click", () => new GradeHistoryModal(this.plugin, exam.title || "Untitled exam", history, exam.passingPercent).open());
 		if (latest) {
+			const result = row.createDiv({ cls: "examiner-row-result" });
 			const score = result.createEl("button", {
 				cls: "examiner-row-score",
 				attr: { "aria-label": `Last result, attempt ${latest.attemptNumber}: ${formatPercent(latest.percent)}. Open details` },
@@ -143,8 +158,27 @@ export class ExamsView extends ItemView {
 		start.addEventListener("click", () => void startExam(this.plugin, exam));
 		const edit = textButton(actions, "Edit");
 		edit.addEventListener("click", () => void this.plugin.editExam(exam));
-		const remove = iconAction(actions, "trash-2", "Delete exam");
-		remove.addEventListener("click", () => void this.delete(exam));
+		const more = iconAction(actions, "more-horizontal", "More options");
+		more.addEventListener("click", (event) => this.showExamMenu(event, exam, history));
+	}
+
+	private showExamMenu(event: MouseEvent, exam: ExamDefinition, history: NumberedAttempt[]): void {
+		const menu = new Menu();
+		menu.addItem((item) =>
+			item
+				.setTitle("Grade history")
+				.setIcon("trending-up")
+				.setDisabled(history.length === 0)
+				.onClick(() => new GradeHistoryModal(this.plugin, exam.title || "Untitled exam", history, exam.passingPercent).open()),
+		);
+		menu.addItem((item) =>
+			item
+				.setTitle("Delete exam")
+				.setIcon("trash-2")
+				.setWarning(true)
+				.onClick(() => void this.delete(exam)),
+		);
+		menu.showAtMouseEvent(event);
 	}
 
 	private async abandon(session: ExamSession): Promise<void> {
