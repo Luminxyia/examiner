@@ -9,7 +9,7 @@ import {
 	summariseStudy,
 	type AttemptSummary,
 } from "../src/core/statistics";
-import { IDLE_LIMIT_MS, MIN_SESSION_MS, StudyTracker, type StudyContext, type StudySessionRecord } from "../src/core/study-time";
+import { IDLE_LIMIT_MS, MIN_SESSION_MS, StudyTracker, type StudyContext, type StudyKind, type StudySessionRecord } from "../src/core/study-time";
 
 const MINUTE = 60_000;
 
@@ -204,7 +204,7 @@ describe("exam history", () => {
 
 const local = (month: number, day: number, hour = 0, minute = 0) => new Date(2026, month, day, hour, minute);
 
-const sessionBetween = (start: Date, end: Date, activeMs: number, kind: "practice" | "exam" = "practice"): StudySessionRecord => ({
+const sessionBetween = (start: Date, end: Date, activeMs: number, kind: StudyKind = "practice"): StudySessionRecord => ({
 	version: 1,
 	id: `s-${start.getTime()}-${activeMs}`,
 	kind,
@@ -285,6 +285,17 @@ describe("summariseStudy", () => {
 			["r-b", 2],
 			["r-a", 1],
 		]);
+	});
+
+	it("counts manually timed study in the totals and the daily heatmap", () => {
+		const now = local(9, 25, 15);
+		const overview = summariseStudy(
+			[sessionBetween(local(9, 25, 9), local(9, 25, 10), 20 * MINUTE), sessionBetween(local(9, 25, 11), local(9, 25, 12), 60 * MINUTE, "manual")],
+			[],
+			now,
+		);
+		expect(overview).toMatchObject({ totalStudyMs: 80 * MINUTE, todayMs: 80 * MINUTE });
+		expect(overview.daily.get("2026-10-25")).toBe(80 * MINUTE);
 	});
 
 	it("is empty, not invented, when nothing has been recorded", () => {

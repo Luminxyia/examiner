@@ -197,7 +197,6 @@ export class ExamEditorView extends ItemView {
 
 		new Setting(details)
 			.setName("Time limit")
-			.setDesc("When time runs out, the exam is submitted with the answers given so far.")
 			.addDropdown((dropdown) => {
 				dropdown.addOption("none", "No time limit");
 				const options = new Set<number>(TIME_LIMIT_PRESETS);
@@ -435,7 +434,6 @@ export class ExamEditorView extends ItemView {
 		if (!this.attachmentsEl) return;
 		renderAttachmentPicker(this.attachmentsEl, {
 			names: this.exam.attachments ?? [],
-			hint: "Drop PDFs or images here",
 			accept: ".pdf,image/*",
 			onFiles: (files) => void this.upload(files),
 			onRemove: (name) => {

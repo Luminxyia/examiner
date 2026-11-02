@@ -52,12 +52,6 @@ export class MistakeReviewModal extends Modal {
 
 		const question = this.plugin.questions.get(mistake.questionId);
 		const usable = question !== undefined && this.plugin.questionIsUsable(question);
-		if (!usable) {
-			body.createDiv({
-				cls: "examiner-muted examiner-small",
-				text: question ? "This question has errors, so it can't be practiced until it is fixed." : "This question has been deleted, so it can't be practiced.",
-			});
-		}
 
 		const footer = new Setting(body).setClass("examiner-review-modal-footer");
 		if (this.mistakes.length > 1) {

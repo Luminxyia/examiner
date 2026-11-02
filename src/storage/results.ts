@@ -96,7 +96,7 @@ export function isStudySessionRecord(value: unknown): value is StudySessionRecor
 	return (
 		isObject(value) &&
 		typeof value.id === "string" &&
-		(value.kind === "practice" || value.kind === "exam") &&
+		(value.kind === "practice" || value.kind === "exam" || value.kind === "manual") &&
 		isDate(value.startedAt) &&
 		isDate(value.endedAt) &&
 		isFiniteNumber(value.activeMs) &&
@@ -153,6 +153,10 @@ export class ResultsStore {
 
 	private get sessionPath(): string {
 		return `${this.folder}/exam-session.json`;
+	}
+
+	private get timerPath(): string {
+		return `${this.folder}/study-timer.json`;
 	}
 
 	async recordPracticeAttempt(record: PracticeAttemptRecord): Promise<void> {
@@ -223,7 +227,7 @@ export class ResultsStore {
 	clearAll(): Promise<void> {
 		return this.serially(async () => {
 			try {
-				for (const path of [this.practicePath, this.examPath, this.studyPath, this.sessionPath]) {
+				for (const path of [this.practicePath, this.examPath, this.studyPath, this.sessionPath, this.timerPath]) {
 					if (await this.files.exists(path)) await this.files.remove(path);
 				}
 			} finally {
@@ -244,6 +248,28 @@ export class ResultsStore {
 			return session;
 		} catch (error) {
 			console.error("Examiner: could not read the saved exam session", error);
+			return null;
+		}
+	}
+
+	async saveStudyTimer(startedAt: string): Promise<void> {
+		await this.files.write(this.timerPath, JSON.stringify({ startedAt }));
+		this.notify();
+	}
+
+	async clearStudyTimer(): Promise<void> {
+		if (await this.files.exists(this.timerPath)) await this.files.remove(this.timerPath);
+		this.notify();
+	}
+
+	async loadStudyTimer(): Promise<string | null> {
+		if (!(await this.files.exists(this.timerPath))) return null;
+		try {
+			const timer = JSON.parse(await this.files.read(this.timerPath)) as { startedAt?: unknown };
+			if (!isDate(timer.startedAt)) return null;
+			return timer.startedAt;
+		} catch (error) {
+			console.error("Examiner: could not read the saved study timer", error);
 			return null;
 		}
 	}

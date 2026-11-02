@@ -1928,11 +1928,6 @@ button.examiner-show-more {
 	margin-top: var(--size-2-1);
 }
 
-.examiner-priority-advice {
-	flex: 0 1 auto;
-	min-width: 0;
-}
-
 .examiner-priority-buttons,
 .examiner-priority-pair {
 	display: flex;

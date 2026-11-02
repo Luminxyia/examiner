@@ -2,7 +2,7 @@ export const IDLE_LIMIT_MS = 5 * 60_000;
 
 export const MIN_SESSION_MS = 5_000;
 
-export type StudyKind = "practice" | "exam";
+export type StudyKind = "practice" | "exam" | "manual";
 
 export interface StudyContext {
 	kind: StudyKind;

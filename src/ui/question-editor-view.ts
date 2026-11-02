@@ -475,7 +475,6 @@ export class QuestionEditorView extends ItemView {
 		if (!this.imagesEl) return;
 		renderAttachmentPicker(this.imagesEl, {
 			names: this.draft.images ?? [],
-			hint: "Drop images here",
 			accept: "image/*",
 			onFiles: (files) => void this.uploadImages(files),
 			onRemove: (name) => {
@@ -582,7 +581,6 @@ export class QuestionEditorView extends ItemView {
 
 	private renderPromptSection(): void {
 		const body = this.section("prompt", "Question");
-		body.createDiv({ cls: "examiner-muted examiner-small", text: "Write {variable} to insert a value." });
 		const container = body.createDiv({ cls: "examiner-prompt-editor" });
 		this.promptEditor = createPromptEditor(container, this.draft.prompt, (text) => {
 			this.draft.prompt = text;
@@ -794,10 +792,6 @@ export class QuestionEditorView extends ItemView {
 			entry(`${name}(${args})`, fn.description);
 		}
 		for (const [name, value] of Object.entries(CONSTANTS)) entry(name, `The constant ${formatNumber(value)}`);
-		details.createDiv({
-			cls: "examiner-muted examiner-small",
-			text: "Trigonometric functions use radians. Convert with rad() and deg(), for example sin(rad(30)).",
-		});
 	}
 
 	private renderAnswerSection(): void {
@@ -915,16 +909,7 @@ export class QuestionEditorView extends ItemView {
 		const parts = [];
 		if (errors > 0) parts.push(errors === 1 ? "1 error" : `${errors} errors`);
 		if (warnings > 0) parts.push(warnings === 1 ? "1 warning" : `${warnings} warnings`);
-		const block = section(el, "Validation", parts.join(", "));
-		if (this.draft.kind === "flashcard") return;
-		block.createDiv({
-
-			cls: "examiner-muted examiner-small",
-			text:
-				errors > 0
-					? "Details are shown beside each field. Questions with errors cannot be practiced or used in exams."
-					: "Details are shown beside each field.",
-		});
+		section(el, "Validation", parts.join(", "));
 	}
 
 	private async renderPreview(): Promise<void> {

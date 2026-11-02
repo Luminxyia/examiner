@@ -23,7 +23,6 @@ export interface AttachmentAccess {
 
 export interface AttachmentPickerOptions {
 	names: readonly string[];
-	hint: string;
 	accept: string;
 	onFiles(files: File[]): void;
 	onRemove(name: string): void;
@@ -45,7 +44,6 @@ export function renderAttachmentPicker(el: HTMLElement, options: AttachmentPicke
 	}
 
 	const zone = el.createDiv({ cls: "examiner-dropzone" });
-	zone.createSpan({ cls: "examiner-muted examiner-small", text: options.hint });
 	const input = zone.createEl("input", { type: "file", cls: "examiner-file-input", attr: { accept: options.accept, multiple: "" } });
 	textButton(zone, "Browse").addEventListener("click", () => input.click());
 	input.addEventListener("change", () => {

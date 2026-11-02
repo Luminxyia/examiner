@@ -1,7 +1,7 @@
 import { loadMathJax, normalizePath, Notice, Plugin, type ViewState } from "obsidian";
 import { hasErrors, validateDefinition, type QuestionDefinition } from "./core/definition";
 import type { ExamDefinition } from "./core/exam";
-import { StudyTracker } from "./core/study-time";
+import { MIN_SESSION_MS, StudyTracker } from "./core/study-time";
 import { EXAMPLE_QUESTION } from "./example";
 import { DEFAULT_SETTINGS, initialSettings, type ExaminerSettings } from "./settings";
 import { parseExamFile, serializeExam } from "./storage/exam-format";
@@ -35,6 +35,7 @@ export default class ExaminerPlugin extends Plugin {
 	vaultFiles!: VaultFiles;
 	private tracker!: StudyTracker;
 	private pendingStudyWrite: Promise<void> = Promise.resolve();
+	studyTimerStartedAt: number | null = null;
 	readonly loadState = new LoadState();
 	unsavedDraft: EditorDraft | null = null;
 	pendingExamDraft: ExamDefinition | null = null;
@@ -99,6 +100,7 @@ export default class ExaminerPlugin extends Plugin {
 		});
 
 		this.addSettingTab(new ExaminerSettingTab(this));
+		await this.loadStudyTimer();
 		this.startStudyTracking();
 		this.app.workspace.onLayoutReady(() => void this.initialiseLibraries());
 	}
@@ -130,9 +132,66 @@ export default class ExaminerPlugin extends Plugin {
 	}
 
 	refreshStudyContext(): void {
+		if (this.studyTimerStartedAt !== null) {
+			this.tracker.setContext(null);
+			return;
+		}
 		const { workspace } = this.app;
 		const view = workspace.getActiveViewOfType(PracticeView) ?? workspace.getActiveViewOfType(ExamSessionView);
 		this.tracker.setContext(view?.studyContext() ?? null);
+	}
+
+	private async loadStudyTimer(): Promise<void> {
+		const startedAt = await this.results.loadStudyTimer();
+		if (startedAt !== null) this.studyTimerStartedAt = Date.parse(startedAt);
+	}
+
+	async toggleStudyTimer(): Promise<void> {
+		if (this.studyTimerStartedAt === null) await this.startStudyTimer();
+		else await this.stopStudyTimer();
+	}
+
+	private async startStudyTimer(): Promise<void> {
+		const startedAt = Date.now();
+		this.studyTimerStartedAt = startedAt;
+		this.refreshStudyContext();
+		try {
+			await this.results.saveStudyTimer(new Date(startedAt).toISOString());
+		} catch (error) {
+			console.error("Examiner: could not save the study timer", error);
+			new Notice("Examiner could not save the study timer. See the developer console for details.");
+		}
+	}
+
+	private async stopStudyTimer(): Promise<void> {
+		const startedAt = this.studyTimerStartedAt;
+		if (startedAt === null) return;
+		const endedAt = Date.now();
+		this.studyTimerStartedAt = null;
+		const activeMs = endedAt - startedAt;
+		if (activeMs >= MIN_SESSION_MS) {
+			try {
+				await this.results.recordStudySession({
+					version: 1,
+					id: createId("s"),
+					kind: "manual",
+					startedAt: new Date(startedAt).toISOString(),
+					endedAt: new Date(endedAt).toISOString(),
+					activeMs,
+				});
+			} catch (error) {
+				this.studyTimerStartedAt = startedAt;
+				console.error("Examiner: could not save study time", error);
+				new Notice("Examiner could not save your study time. See the developer console for details.");
+				return;
+			}
+		}
+		try {
+			await this.results.clearStudyTimer();
+		} catch (error) {
+			console.error("Examiner: could not clear the saved study timer", error);
+		}
+		this.refreshStudyContext();
 	}
 
 	async endStudyAndMeasure(attemptId: string): Promise<number> {
@@ -281,6 +340,7 @@ export default class ExaminerPlugin extends Plugin {
 	async resetAllData(): Promise<boolean> {
 
 		this.tracker.discard();
+		this.studyTimerStartedAt = null;
 		await this.pendingStudyWrite;
 		this.unsavedDraft = null;
 		this.pendingExamDraft = null;

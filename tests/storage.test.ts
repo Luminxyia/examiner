@@ -447,6 +447,32 @@ describe("ResultsStore", () => {
 		expect(await new ResultsStore(files, "plugin").readStudySessions()).toEqual([session]);
 	});
 
+	it("keeps manual study sessions apart from exam sessions", async () => {
+		const files = new FakeDataFiles();
+		const session = { version: 1 as const, id: "s-2", kind: "manual" as const, startedAt: new Date(0).toISOString(), endedAt: new Date(60_000).toISOString(), activeMs: 60_000 };
+		await new ResultsStore(files, "plugin").recordStudySession(session);
+		const sessions = await new ResultsStore(files, "plugin").readStudySessions();
+		expect(sessions).toEqual([session]);
+		expect(sessions[0]?.kind).toBe("manual");
+	});
+
+	it("saves, restores and clears a running study timer", async () => {
+		const files = new FakeDataFiles();
+		const store = new ResultsStore(files, "plugin");
+		expect(await store.loadStudyTimer()).toBeNull();
+		const startedAt = new Date(5_000).toISOString();
+		await store.saveStudyTimer(startedAt);
+		expect(await new ResultsStore(files, "plugin").loadStudyTimer()).toBe(startedAt);
+		await store.clearStudyTimer();
+		expect(await store.loadStudyTimer()).toBeNull();
+	});
+
+	it("ignores a corrupt study timer file", async () => {
+		const files = new FakeDataFiles();
+		await files.write("plugin/study-timer.json", "{not json");
+		expect(await new ResultsStore(files, "plugin").loadStudyTimer()).toBeNull();
+	});
+
 	it("ignores a corrupt session file", async () => {
 		const files = new FakeDataFiles();
 		await files.write("plugin/exam-session.json", "{not json");

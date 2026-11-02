@@ -80,6 +80,7 @@ describe("resetting plugin data", () => {
 		});
 		await store.recordStudySession({ version: 1, id: "s-1", kind: "practice", startedAt: new Date(0).toISOString(), endedAt: new Date(60_000).toISOString(), activeMs: 60_000 });
 		await store.saveSession({ version: 1, examId: "e-1", examTitle: "Mock", startedAt: new Date(0).toISOString(), deadline: null, timeLimitMinutes: null, items: [], responses: [], current: 0 });
+		await store.saveStudyTimer(new Date(0).toISOString());
 		expect(await store.readExamResults()).toHaveLength(1);
 		let notified = 0;
 		store.onChange(() => notified++);
@@ -91,6 +92,7 @@ describe("resetting plugin data", () => {
 		expect(await store.readStudySessions()).toEqual([]);
 		expect(await store.readPracticeAttempts()).toEqual([]);
 		expect(await store.loadSession()).toBeNull();
+		expect(await store.loadStudyTimer()).toBeNull();
 		expect(notified).toBe(1);
 	});
 

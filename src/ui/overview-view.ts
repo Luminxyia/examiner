@@ -38,7 +38,7 @@ import { GradeChart, gradePoints, renderStudyHeatmap } from "./charts";
 import { GradeHistoryModal } from "./grade-history-modal";
 import { MistakeReviewModal } from "./mistake-review-modal";
 import { startExam } from "./start-exam";
-import { formatDateTime, formatPercent, formatScore, renderEmptyState, section, textButton } from "./shared";
+import { formatClock, formatDateTime, formatPercent, formatScore, renderEmptyState, section, textButton } from "./shared";
 
 export const VIEW_TYPE_OVERVIEW = "examiner-overview";
 
@@ -73,6 +73,7 @@ export class OverviewView extends ItemView {
 	private historyFilter: HistoryFilter = "all";
 	private readonly expandedExams = new Set<string>();
 	private showAllMistakes = false;
+	private timerButton: HTMLButtonElement | null = null;
 
 	constructor(
 		leaf: WorkspaceLeaf,
@@ -97,6 +98,7 @@ export class OverviewView extends ItemView {
 		this.contentEl.addClass("examiner-view", "examiner-overview");
 		this.register(this.plugin.results.onChange(() => void this.render()));
 		this.register(this.plugin.exams.onChange(() => void this.render()));
+		this.registerInterval(window.setInterval(() => this.updateTimerButton(), 1000));
 		await this.render();
 	}
 
@@ -104,7 +106,11 @@ export class OverviewView extends ItemView {
 		const token = ++this.renderToken;
 		const root = createDiv({ cls: "examiner-exams-body" });
 		const header = root.createDiv({ cls: "examiner-page-header" });
-		header.createEl("h2", { cls: "examiner-heading", text: "Study overview" });
+		const headingRow = header.createDiv({ cls: "examiner-header-actions" });
+		this.timerButton = textButton(headingRow, "");
+		this.timerButton.addEventListener("click", () => void this.plugin.toggleStudyTimer());
+		this.updateTimerButton();
+		headingRow.createEl("h2", { cls: "examiner-heading", text: "Study overview" });
 		textButton(header, "Go to exams").addEventListener("click", () => void this.plugin.openExams());
 
 		const now = new Date();
@@ -142,6 +148,19 @@ export class OverviewView extends ItemView {
 			this.renderMistakes(root, mistakes);
 		}
 		this.contentEl.replaceChildren(root);
+	}
+
+	private updateTimerButton(): void {
+		const button = this.timerButton;
+		if (!button) return;
+		const startedAt = this.plugin.studyTimerStartedAt;
+		button.toggleClass("mod-cta", startedAt !== null);
+		if (startedAt === null) {
+			button.setText("Start studying");
+			return;
+		}
+		const elapsedSeconds = Math.max(0, Math.floor((Date.now() - startedAt) / 1000));
+		button.setText(`Stop studying · ${formatClock(elapsedSeconds)}`);
 	}
 
 	override async onClose(): Promise<void> {
@@ -198,10 +217,7 @@ export class OverviewView extends ItemView {
 			for (const exam of exams) picker.addOption(exam.examId, this.examTitle(exam.examId, exam.title));
 		});
 		this.gradeBlock = block;
-		if (!picker || selected === undefined) {
-			block.createDiv({ cls: "examiner-muted examiner-small", text: "No exams submitted yet." });
-			return;
-		}
+		if (!picker || selected === undefined) return;
 		const dropdown: DropdownComponent = picker;
 		this.gradePicker = dropdown;
 		this.chart = new GradeChart(block);
@@ -238,10 +254,7 @@ export class OverviewView extends ItemView {
 				if (list) this.renderGroups(list, groups);
 			});
 		});
-		if (groups.length === 0) {
-			block.createDiv({ cls: "examiner-muted examiner-small", text: "No exams submitted yet." });
-			return;
-		}
+		if (groups.length === 0) return;
 		list = block.createDiv({ cls: "examiner-list examiner-exam-groups" });
 		this.renderGroups(list, groups);
 	}
@@ -292,10 +305,7 @@ export class OverviewView extends ItemView {
 
 	private renderPriorities(root: HTMLElement, priorities: readonly ExamPriority[], mistakes: readonly MistakeEntry[]): void {
 		const block = section(root, "Your study priorities");
-		if (priorities.length === 0) {
-			block.createDiv({ cls: "examiner-muted examiner-small", text: "Submit an exam to see where to focus." });
-			return;
-		}
+		if (priorities.length === 0) return;
 		const topics = aggregateTopics(mistakes.filter((mistake) => isRepeated(mistake) && !mistake.correctSinceLastMiss)).slice(0, 5);
 		if (topics.length > 0) {
 			const line = block.createDiv({ cls: "examiner-topic-line" });
@@ -323,15 +333,6 @@ export class OverviewView extends ItemView {
 		const actionRow = item.createDiv({ cls: "examiner-priority-action" });
 		const exam = this.plugin.exams.get(priority.examId);
 		const unresolved = priority.mistakes.filter((mistake) => !mistake.correctSinceLastMiss);
-		const recommendation: Record<ExamPriority["action"], string> = {
-			"review-mistakes": "Review your latest mistakes.",
-			"practice-mistakes": "",
-			"gather-evidence": "Take it again to build up enough evidence.",
-			"retry-exam": priority.status === "performing-well" ? "Retake it later to check the results hold." : "",
-		};
-		const advice = recommendation[priority.action];
-		if (advice) actionRow.createSpan({ cls: "examiner-small examiner-priority-advice", text: advice });
-
 		const buttons = actionRow.createDiv({ cls: "examiner-priority-buttons" });
 		if (priority.action === "review-mistakes") {
 			textButton(buttons, "Review mistakes").addEventListener("click", () => this.reviewMistakes(unresolved));
@@ -356,10 +357,7 @@ export class OverviewView extends ItemView {
 
 	private renderNextStep(root: HTMLElement, recommendation: Recommendation | null): void {
 		const block = section(root, "Continue studying");
-		if (!recommendation) {
-			block.createDiv({ cls: "examiner-muted examiner-small", text: "Nothing to recommend yet." });
-			return;
-		}
+		if (!recommendation) return;
 		const next = block.createDiv({ cls: "examiner-next-step" });
 		next.createDiv({ cls: "examiner-row-title", text: recommendation.heading });
 		next.createDiv({ cls: "examiner-row-meta", text: recommendation.detail });
@@ -420,10 +418,7 @@ export class OverviewView extends ItemView {
 
 		const count = mistakes.length;
 		const block = section(root, "Mistakes to revisit");
-		if (count === 0) {
-			block.createDiv({ cls: "examiner-muted examiner-small", text: "No incorrect answers recorded yet." });
-			return;
-		}
+		if (count === 0) return;
 		const topics = aggregateTopics(mistakes).slice(0, 6);
 		if (topics.length > 0) {
 			const line = block.createDiv({ cls: "examiner-topic-line" });
@@ -471,9 +466,6 @@ function renderTrend(parent: HTMLElement, trend: ScoreTrend): void {
 		parent.createDiv({
 			cls: "examiner-row-meta",
 			text: trend.reason === "single-attempt" ? "No trend yet" : "Not comparable",
-			attr: {
-				title: trend.reason === "single-attempt" ? "Only one attempt so far" : "The exam's questions changed since the previous attempt",
-			},
 		});
 		return;
 	}
