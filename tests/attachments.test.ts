@@ -32,6 +32,35 @@ describe("attachment names", () => {
 	});
 });
 
+describe("AttachmentStore folder names", () => {
+	it("stores each owner's files in the folder named for it", async () => {
+		const files = new FakeBinaryFiles();
+		const store = new AttachmentStore(files, FOLDER, (ownerId) => (ownerId === "e-1" ? "Midterm" : ownerId));
+		const name = await store.add("e-1", "sheet.pdf", bytes(), []);
+		expect(files.files.has(`${FOLDER}/Midterm/${name}`)).toBe(true);
+		expect(store.path("e-1", name)).toBe(`${FOLDER}/Midterm/${name}`);
+	});
+
+	it("moves an owner's folder when its name changes", async () => {
+		const files = new FakeBinaryFiles();
+		const store = new AttachmentStore(files, FOLDER);
+		await store.add("e-1", "sheet.pdf", bytes(), []);
+		await store.renameOwner("e-1", "Midterm");
+		expect([...files.files.keys()]).toEqual([`${FOLDER}/Midterm/sheet.pdf`]);
+		await store.renameOwner("Missing", "Anything");
+		expect([...files.files.keys()]).toEqual([`${FOLDER}/Midterm/sheet.pdf`]);
+	});
+
+	it("refuses to move a folder onto one that already exists", async () => {
+		const files = new FakeBinaryFiles();
+		const store = new AttachmentStore(files, FOLDER);
+		await store.add("a", "one.pdf", bytes(), []);
+		await store.add("b", "two.pdf", bytes(), []);
+		await expect(store.renameOwner("a", "b")).rejects.toThrow(AttachmentError);
+		expect(files.files.has(`${FOLDER}/a/one.pdf`)).toBe(true);
+	});
+});
+
 describe("AttachmentStore", () => {
 	it("stores files inside the exam's folder and reads them back", async () => {
 		const files = new FakeBinaryFiles();

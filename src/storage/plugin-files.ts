@@ -19,6 +19,14 @@ export class AdapterFolderFiles implements FolderFiles {
 		return this.adapter.write(normalizePath(path), content);
 	}
 
+	exists(path: string): Promise<boolean> {
+		return this.adapter.exists(normalizePath(path));
+	}
+
+	rename(from: string, to: string): Promise<void> {
+		return this.adapter.rename(normalizePath(from), normalizePath(to));
+	}
+
 	async trash(path: string): Promise<void> {
 		const normalised = normalizePath(path);
 		if (!(await this.adapter.trashSystem(normalised))) await this.adapter.trashLocal(normalised);

@@ -3,7 +3,7 @@ import { hasErrors, validateDefinition, type QuestionDefinition } from "./core/d
 import type { ExamDefinition } from "./core/exam";
 import { MIN_SESSION_MS, StudyTracker } from "./core/study-time";
 import { EXAMPLE_QUESTION } from "./example";
-import { DEFAULT_SETTINGS, initialSettings, type ExaminerSettings } from "./settings";
+import { DEFAULT_DATA_FOLDER, DEFAULT_SETTINGS, initialSettings, type ExaminerSettings } from "./settings";
 import { parseExamFile, serializeExam } from "./storage/exam-format";
 import { createId, fileKindOf } from "./storage/format-shared";
 import { DefinitionLibrary } from "./storage/library";
@@ -46,17 +46,32 @@ export default class ExaminerPlugin extends Plugin {
 	override async onload(): Promise<void> {
 		await this.loadSettings();
 
-		const pluginFolder = this.manifest.dir ?? normalizePath(`${this.app.vault.configDir}/plugins/${this.manifest.id}`);
+		let dataFolder = this.settings.dataFolder.trim();
+		if (dataFolder === "") {
+			dataFolder = DEFAULT_DATA_FOLDER;
+		}
+		dataFolder = normalizePath(dataFolder);
 		const files = new AdapterFolderFiles(this.app.vault.adapter);
+		await files.ensureFolder(dataFolder);
 		this.questions = new DefinitionLibrary(
 			files,
 			{ kind: "question", parse: parseQuestionFile, serialize: serializeQuestion },
-			`${pluginFolder}/questions`,
+			`${dataFolder}/questions`,
+			(previousName, newName) => this.renameOwnerFolder(this.questionImages, previousName, newName),
 		);
-		this.exams = new DefinitionLibrary(files, { kind: "exam", parse: parseExamFile, serialize: serializeExam }, `${pluginFolder}/exams`);
-		this.results = new ResultsStore(this.app.vault.adapter, pluginFolder);
-		this.attachments = new AttachmentStore(this.app.vault.adapter, `${pluginFolder}/attachments`);
-		this.questionImages = new AttachmentStore(this.app.vault.adapter, `${pluginFolder}/question-images`);
+		this.exams = new DefinitionLibrary(
+			files,
+			{ kind: "exam", parse: parseExamFile, serialize: serializeExam },
+			`${dataFolder}/exams`,
+			(previousName, newName) => this.renameOwnerFolder(this.attachments, previousName, newName),
+		);
+		this.results = new ResultsStore(this.app.vault.adapter, dataFolder);
+		this.attachments = new AttachmentStore(this.app.vault.adapter, `${dataFolder}/attachments`, (examId) =>
+			ownerFolderName(this.exams, examId),
+		);
+		this.questionImages = new AttachmentStore(this.app.vault.adapter, `${dataFolder}/question-images`, (questionId) =>
+			ownerFolderName(this.questions, questionId),
+		);
 		this.vaultFiles = new VaultFiles(this.app, () => this.settings.reuseFolder);
 		this.registerEvent(this.app.vault.on("rename", (file, oldPath) => void this.followRename(oldPath, file.path)));
 
@@ -319,6 +334,14 @@ export default class ExaminerPlugin extends Plugin {
 		await this.openView({ type: VIEW_TYPE_EXAMS });
 	}
 
+	private async renameOwnerFolder(store: AttachmentStore, previousName: string, newName: string): Promise<void> {
+		try {
+			await store.renameOwner(previousName, newName);
+		} catch (error) {
+			console.error(`Examiner: could not rename the folder ${previousName} to ${newName}`, error);
+		}
+	}
+
 	get attachmentAccess(): AttachmentAccess {
 		return { store: this.attachments, vault: this.vaultFiles, adapter: this.app.vault.adapter };
 	}
@@ -439,6 +462,14 @@ export default class ExaminerPlugin extends Plugin {
 		await leaf.setViewState({ ...viewState, active: true });
 		await workspace.revealLeaf(leaf);
 	}
+}
+
+function ownerFolderName(library: DefinitionLibrary<{ id: string; title: string }>, id: string): string {
+	const name = library.fileNameOf(id);
+	if (name === undefined) {
+		return id;
+	}
+	return name;
 }
 
 function plural(count: number, noun: string): string {

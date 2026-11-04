@@ -1070,10 +1070,10 @@ export class QuestionEditorView extends ItemView {
 		if (!confirmed) return;
 		this.saving = true;
 		try {
-			await this.plugin.questions.delete(this.saved.id);
 			await this.plugin.questionImages.removeOwner(this.saved.id).catch((error: unknown) => {
 				console.error("Examiner: could not delete the question's images", error);
 			});
+			await this.plugin.questions.delete(this.saved.id);
 		} finally {
 			this.saving = false;
 		}

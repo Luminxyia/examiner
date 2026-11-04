@@ -5,8 +5,34 @@ export interface FolderFiles {
 	list(folder: string): Promise<string[]>;
 	read(path: string): Promise<string>;
 	write(path: string, content: string): Promise<void>;
+	exists(path: string): Promise<boolean>;
+	rename(from: string, to: string): Promise<void>;
 	trash(path: string): Promise<void>;
 	ensureFolder(folder: string): Promise<void>;
+}
+
+export type FileNameChange = (previousName: string, newName: string) => Promise<void>;
+
+const MAX_FILE_NAME_LENGTH = 100;
+
+export function fileNameFor(title: string, fallback: string): string {
+	let name = Array.from(title, (char) => (char.charCodeAt(0) < 32 ? "-" : char)).join("");
+	name = name.replace(/[\\/:*?"<>|#^[\]]/g, "-");
+	name = name.replace(/\s+/g, " ").trim();
+	name = name.replace(/^\.+/, "");
+	if (name.length > MAX_FILE_NAME_LENGTH) {
+		name = name.slice(0, MAX_FILE_NAME_LENGTH);
+	}
+	name = name.replace(/[. ]+$/, "");
+	if (name === "") {
+		return fallback;
+	}
+	return name;
+}
+
+function nameOfPath(path: string): string {
+	const file = path.split("/").pop() ?? path;
+	return file.replace(/\.md$/, "");
 }
 
 export interface DefinitionFormat<T> {
@@ -31,6 +57,7 @@ export class DefinitionLibrary<T extends { id: string; title: string }> {
 		private readonly files: FolderFiles,
 		private readonly format: DefinitionFormat<T>,
 		readonly folder: string,
+		private readonly onFileNameChange?: FileNameChange,
 	) {}
 
 	onChange(listener: () => void): () => void {
@@ -69,6 +96,14 @@ export class DefinitionLibrary<T extends { id: string; title: string }> {
 		return this.pathById.get(id);
 	}
 
+	fileNameOf(id: string): string | undefined {
+		const path = this.pathById.get(id);
+		if (path === undefined) {
+			return undefined;
+		}
+		return nameOfPath(path);
+	}
+
 	problems(): FileProblem[] {
 		const problems: FileProblem[] = [];
 		for (const [path, result] of this.entries) {
@@ -85,10 +120,11 @@ export class DefinitionLibrary<T extends { id: string; title: string }> {
 	}
 
 	async create(definition: T): Promise<string> {
-		const path = this.pathFor(definition.id);
-		if (this.entries.has(path)) throw new Error(`A file named ${path} already exists.`);
+		if (this.pathById.has(definition.id)) throw new Error(`A file with the ID ${definition.id} already exists.`);
 		await this.files.ensureFolder(this.folder);
+		const path = await this.freePath(definition.title, definition.id, null);
 		await this.write(path, this.format.serialize(definition));
+		await this.fileNameChanged(definition.id, nameOfPath(path));
 		return path;
 	}
 
@@ -96,8 +132,20 @@ export class DefinitionLibrary<T extends { id: string; title: string }> {
 		const path = this.pathById.get(definition.id);
 		if (path === undefined) throw new Error(`No file has the ID ${definition.id}.`);
 		const current = await this.files.read(path);
-		await this.write(path, this.format.serialize(definition, current));
-		return path;
+		let target = path;
+		const previous = this.entries.get(path);
+		if (previous?.ok && previous.definition.title.trim() !== definition.title.trim()) {
+			target = await this.freePath(definition.title, definition.id, path);
+		}
+		if (target !== path) {
+			await this.files.rename(path, target);
+			this.entries.delete(path);
+		}
+		await this.write(target, this.format.serialize(definition, current));
+		if (target !== path) {
+			await this.fileNameChanged(nameOfPath(path), nameOfPath(target));
+		}
+		return target;
 	}
 
 	async delete(id: string): Promise<void> {
@@ -123,10 +171,7 @@ export class DefinitionLibrary<T extends { id: string; title: string }> {
 		const result = this.entries.get(path);
 		if (!result?.ok) return;
 		const current = await this.files.read(path);
-		await this.write(this.pathFor(newId), this.format.serialize({ ...result.definition, id: newId }, current));
-		await this.files.trash(path);
-		this.entries.delete(path);
-		this.refresh();
+		await this.write(path, this.format.serialize({ ...result.definition, id: newId }, current));
 	}
 
 	async import(content: string): Promise<boolean> {
@@ -135,12 +180,48 @@ export class DefinitionLibrary<T extends { id: string; title: string }> {
 		const result = this.format.parse(content);
 		if (!result.ok || this.pathById.has(result.definition.id)) return false;
 		await this.files.ensureFolder(this.folder);
-		await this.write(this.pathFor(result.definition.id), content);
+		const path = await this.freePath(result.definition.title, result.definition.id, null);
+		await this.write(path, content);
 		return true;
 	}
 
-	private pathFor(id: string): string {
-		return `${this.folder}/${id}.md`;
+	private preferredPath(definition: T): string {
+		return `${this.folder}/${fileNameFor(definition.title, definition.id)}.md`;
+	}
+
+	private async freePath(title: string, id: string, currentPath: string | null): Promise<string> {
+		const base = fileNameFor(title, id);
+		for (let index = 1; ; index++) {
+			let name = base;
+			if (index > 1) {
+				name = `${base} (${index})`;
+			}
+			const path = `${this.folder}/${name}.md`;
+			if (currentPath !== null && path.toLowerCase() === currentPath.toLowerCase()) {
+				return currentPath;
+			}
+			if (await this.isTaken(path)) {
+				continue;
+			}
+			return path;
+		}
+	}
+
+	private async isTaken(path: string): Promise<boolean> {
+		const lower = path.toLowerCase();
+		for (const existing of this.entries.keys()) {
+			if (existing.toLowerCase() === lower) {
+				return true;
+			}
+		}
+		return this.files.exists(path);
+	}
+
+	private async fileNameChanged(previousName: string, newName: string): Promise<void> {
+		if (this.onFileNameChange === undefined) {
+			return;
+		}
+		await this.onFileNameChange(previousName, newName);
 	}
 
 	private async write(path: string, content: string): Promise<void> {
@@ -158,7 +239,7 @@ export class DefinitionLibrary<T extends { id: string; title: string }> {
 	}
 
 	private refresh(): void {
-		const ownsName = (path: string, id: string) => path === this.pathFor(id);
+		const ownsName = (path: string, definition: T) => path === this.preferredPath(definition);
 		const ordered = [...this.entries].sort(([a], [b]) => a.localeCompare(b));
 		this.pathById = new Map();
 		this.duplicates = new Map();
@@ -168,7 +249,7 @@ export class DefinitionLibrary<T extends { id: string; title: string }> {
 			const winner = this.pathById.get(id);
 			if (winner === undefined) {
 				this.pathById.set(id, path);
-			} else if (ownsName(path, id)) {
+			} else if (ownsName(path, result.definition)) {
 				this.duplicates.set(winner, path);
 				this.pathById.set(id, path);
 			} else {

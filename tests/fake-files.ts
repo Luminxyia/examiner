@@ -30,6 +30,16 @@ export class FakeFolderFiles implements FolderFiles {
 		return Promise.resolve();
 	}
 
+	exists(path: string): Promise<boolean> {
+		return Promise.resolve(this.files.has(path) || this.folders.has(path));
+	}
+
+	rename(from: string, to: string): Promise<void> {
+		this.files.set(to, this.content(from));
+		this.files.delete(from);
+		return Promise.resolve();
+	}
+
 	trash(path: string): Promise<void> {
 		this.files.delete(path);
 		this.trashed.push(path);
@@ -111,6 +121,22 @@ export class FakeBinaryFiles implements BinaryFiles {
 			this.folders.delete(entry);
 		}
 		this.folders.delete(path);
+		return Promise.resolve();
+	}
+
+	rename(from: string, to: string): Promise<void> {
+		for (const path of [...this.files.keys()]) {
+			if (!path.startsWith(`${from}/`)) continue;
+			const data = this.files.get(path);
+			if (data === undefined) continue;
+			this.files.delete(path);
+			this.files.set(`${to}${path.slice(from.length)}`, data);
+		}
+		for (const folder of [...this.folders]) {
+			if (folder !== from && !folder.startsWith(`${from}/`)) continue;
+			this.folders.delete(folder);
+			this.folders.add(`${to}${folder.slice(from.length)}`);
+		}
 		return Promise.resolve();
 	}
 }

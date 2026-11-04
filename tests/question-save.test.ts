@@ -48,20 +48,20 @@ describe("saving an edited question", () => {
 		await saveLikeTheEditor(library, { ...original, marks: 3 });
 		expect(library.definitions()).toHaveLength(1);
 		expect(library.get("q-orig")).toMatchObject({ title: "Basic addition", marks: 3 });
-		expect([...files.files.keys()]).toEqual([`${FOLDER}/q-orig.md`]);
+		expect([...files.files.keys()]).toEqual([`${FOLDER}/Basic addition.md`]);
 	});
 
 	it("saves a renamed question as a new question and leaves the original untouched", async () => {
 		const files = new FakeFolderFiles();
 		const library = questionLibrary(files);
 		const original = await saveLikeTheEditor(library, basicAddition({ id: "q-orig" }));
-		const originalFile = files.content(`${FOLDER}/q-orig.md`);
+		const originalFile = files.content(`${FOLDER}/Basic addition.md`);
 
 		const copy = await saveLikeTheEditor(library, { ...original, title: "Harder addition", prompt: "What is {x} + {y} + 1?" });
 
 		expect(copy.id).not.toBe("q-orig");
 		expect(copy).toMatchObject({ title: "Harder addition", prompt: "What is {x} + {y} + 1?" });
-		expect(files.content(`${FOLDER}/q-orig.md`)).toBe(originalFile);
+		expect(files.content(`${FOLDER}/Basic addition.md`)).toBe(originalFile);
 		expect(library.get("q-orig")).toMatchObject({ title: "Basic addition", prompt: "What is {x} + {y}?" });
 		expect(library.definitions()).toHaveLength(2);
 	});

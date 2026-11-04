@@ -3,7 +3,7 @@ import type { QuestionDefinition } from "../src/core/definition";
 import type { ExamDefinition } from "../src/core/exam";
 import { parseExamFile, serializeExam } from "../src/storage/exam-format";
 import { splitFrontmatter } from "../src/storage/frontmatter";
-import { DefinitionLibrary } from "../src/storage/library";
+import { DefinitionLibrary, fileNameFor } from "../src/storage/library";
 import { parseQuestionFile, serializeQuestion } from "../src/storage/question-format";
 import { FakeFolderFiles } from "./fake-files";
 import { basicAddition } from "./helpers";
@@ -27,12 +27,32 @@ describe("DefinitionLibrary", () => {
 		return fresh;
 	};
 
-	it("creates files named after the ID in its folder", async () => {
+	it("creates files named after the title in its folder", async () => {
 		const path = await library.create(basicAddition());
-		expect(path).toBe(`${FOLDER}/q-test0001.md`);
+		expect(path).toBe(`${FOLDER}/Basic addition.md`);
+		expect(library.fileNameOf("q-test0001")).toBe("Basic addition");
 		expect(files.folders.has(FOLDER)).toBe(true);
 		expect(library.get("q-test0001")).toEqual(basicAddition());
 		await expect(library.create(basicAddition())).rejects.toThrow("already exists");
+	});
+
+	it("numbers files whose titles are already taken, ignoring case", async () => {
+		await library.create(basicAddition());
+		expect(await library.create(basicAddition({ id: "q-second" }))).toBe(`${FOLDER}/Basic addition (2).md`);
+		expect(await library.create(basicAddition({ id: "q-third", title: "basic ADDITION" }))).toBe(`${FOLDER}/basic ADDITION (3).md`);
+	});
+
+	it("does not overwrite a file that appeared after loading", async () => {
+		files.files.set(`${FOLDER}/Basic addition.md`, "Someone else's note.");
+		expect(await library.create(basicAddition())).toBe(`${FOLDER}/Basic addition (2).md`);
+		expect(files.content(`${FOLDER}/Basic addition.md`)).toBe("Someone else's note.");
+	});
+
+	it("replaces characters that cannot be used in file names", async () => {
+		expect(fileNameFor('Ohm\'s law: V/I = R? [AC] #1 "test" <a|b> ^x', "q-1")).toBe("Ohm's law- V-I = R- -AC- -1 -test- -a-b- -x");
+		expect(fileNameFor("  ...hidden.  ", "q-1")).toBe("hidden");
+		expect(fileNameFor("   ", "q-1")).toBe("q-1");
+		expect(fileNameFor("a".repeat(150), "q-1")).toHaveLength(100);
 	});
 
 	it("loads definitions after a restart", async () => {
@@ -49,10 +69,28 @@ describe("DefinitionLibrary", () => {
 		expect((await reload()).definitions()).toEqual([]);
 	});
 
-	it("updates a definition in place, keeping its file name when the title changes", async () => {
+	it("updates a definition in place, keeping its file name when the title is unchanged", async () => {
 		const path = await library.create(basicAddition());
-		expect(await library.save(basicAddition({ title: "Simple sums", prompt: "Add {x} and {y}." }))).toBe(path);
+		expect(await library.save(basicAddition({ prompt: "Add {x} and {y}." }))).toBe(path);
 		expect(splitFrontmatter(files.content(path)).body).toBe("Add {x} and {y}.\n");
+		expect([...files.files.keys()]).toEqual([path]);
+	});
+
+	it("renames the file when the title changes and reports the new name", async () => {
+		const changes: string[][] = [];
+		const tracked = new DefinitionLibrary(files, questionFormat, FOLDER, (previousName, newName) => {
+			changes.push([previousName, newName]);
+			return Promise.resolve();
+		});
+		await tracked.create(basicAddition());
+		const path = await tracked.save(basicAddition({ title: "Simple sums", prompt: "Add {x} and {y}." }));
+		expect(path).toBe(`${FOLDER}/Simple sums.md`);
+		expect([...files.files.keys()]).toEqual([path]);
+		expect(splitFrontmatter(files.content(path)).body).toBe("Add {x} and {y}.\n");
+		expect(changes).toEqual([
+			["q-test0001", "Basic addition"],
+			["Basic addition", "Simple sums"],
+		]);
 		expect((await reload()).get("q-test0001")?.title).toBe("Simple sums");
 	});
 
@@ -60,8 +98,8 @@ describe("DefinitionLibrary", () => {
 		const path = await library.create(basicAddition());
 		files.files.set(path, files.content(path).replace("---\n", "---\nsource: textbook\n"));
 		const reloaded = await reload();
-		await reloaded.save(basicAddition({ title: "Changed" }));
-		expect(files.content(path)).toContain("source: textbook");
+		const renamed = await reloaded.save(basicAddition({ title: "Changed" }));
+		expect(files.content(renamed)).toContain("source: textbook");
 	});
 
 	it("deletes to the trash", async () => {
@@ -85,7 +123,7 @@ describe("DefinitionLibrary", () => {
 		expect(problems[1]?.errors[0]).toContain('needs "examiner: question"');
 	});
 
-	it("prefers the file named after an ID when two share it, and can give the copy a new ID", async () => {
+	it("prefers the file named after its title when two share an ID, and can give the copy a new ID", async () => {
 		const original = await library.create(basicAddition());
 		files.files.set(`${FOLDER}/a-copy.md`, files.content(original));
 		const reloaded = await reload();
@@ -96,15 +134,14 @@ describe("DefinitionLibrary", () => {
 
 		await reloaded.assignNewId(`${FOLDER}/a-copy.md`, "q-fresh");
 		expect(reloaded.problems()).toEqual([]);
-		expect(reloaded.pathOf("q-fresh")).toBe(`${FOLDER}/q-fresh.md`);
-		expect(files.files.has(`${FOLDER}/a-copy.md`)).toBe(false);
+		expect(reloaded.pathOf("q-fresh")).toBe(`${FOLDER}/a-copy.md`);
 		expect(reloaded.definitions().map((definition) => definition.id).sort()).toEqual(["q-fresh", "q-test0001"]);
 	});
 
 	it("imports files from elsewhere once, skipping IDs already in use and other kinds", async () => {
 		const content = serializeQuestion(basicAddition());
 		expect(await library.import(content)).toBe(true);
-		expect(files.content(`${FOLDER}/q-test0001.md`)).toBe(content);
+		expect(files.content(`${FOLDER}/Basic addition.md`)).toBe(content);
 		expect(await library.import(content)).toBe(false);
 		expect(await library.import("---\ntags: [x]\n---\nA note")).toBe(false);
 		expect(await library.import(serializeExam({ id: "e-1", title: "Exam", tags: [], timeLimitMinutes: null, passingPercent: 50, questions: [] }))).toBe(false);
@@ -126,6 +163,6 @@ describe("DefinitionLibrary", () => {
 		const exam: ExamDefinition = { id: "e-1", title: "Mock", tags: [], timeLimitMinutes: 20, passingPercent: 50, questions: [] };
 		await exams.create(exam);
 		expect(exams.get("e-1")).toEqual(exam);
-		expect(files.files.has("plugin/exams/e-1.md")).toBe(true);
+		expect(files.files.has("plugin/exams/Mock.md")).toBe(true);
 	});
 });

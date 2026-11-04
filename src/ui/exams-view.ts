@@ -200,9 +200,9 @@ export class ExamsView extends ItemView {
 			destructive: true,
 		});
 		if (!confirmed) return;
-		await this.plugin.exams.delete(exam.id);
 		await this.plugin.attachments.removeOwner(exam.id).catch((error: unknown) => {
 			console.error("Examiner: could not delete the exam's reference materials", error);
 		});
+		await this.plugin.exams.delete(exam.id);
 	}
 }

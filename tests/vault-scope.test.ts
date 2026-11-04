@@ -129,7 +129,7 @@ describe("VaultFiles", () => {
 
 describe("settings on a fresh install", () => {
 	it("skips the old-notes import when there is no saved data", () => {
-		expect(initialSettings(null)).toEqual({ exampleCreated: false, vaultFilesImported: true, reuseFolder: "" });
+		expect(initialSettings(null)).toEqual({ exampleCreated: false, vaultFilesImported: true, reuseFolder: "", dataFolder: "examiner" });
 	});
 
 	it("still runs the one-time import when upgrading from saved data", () => {

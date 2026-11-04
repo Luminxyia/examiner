@@ -12,6 +12,10 @@ export class ExaminerSettingTab extends PluginSettingTab {
 	override getSettingDefinitions(): SettingDefinitionItem[] {
 		return [
 			{
+				name: "Data folder",
+				control: { type: "folder", key: "dataFolder", placeholder: "examiner" },
+			},
+			{
 				name: "Reuse files from folder",
 				desc: "When you attach a file, Examiner checks this folder and its subfolders for an identical file and links to it instead of making a copy. Leave empty to always make a copy.",
 				aliases: ["duplicate", "attachment", "image"],
