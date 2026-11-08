@@ -1,5 +1,5 @@
 import type { App, Component } from "obsidian";
-import { itemMarks, type ExamItemResult, type ItemOutcome } from "../core/exam";
+import { attemptText, itemMarks, type ExamItemResult, type ItemOutcome } from "../core/exam";
 import { workedSteps } from "../core/generate";
 import { formatDuration } from "../core/statistics";
 import type { ExamResultRecord } from "../storage/results";
@@ -7,6 +7,7 @@ import { renderQuestionImages, type AttachmentAccess } from "./attachment-picker
 
 import { renderOutcomeBar, renderScoreBars } from "./charts";
 import {
+	copyText,
 	formatDateTime,
 	formatMarks,
 	formatPercent,
@@ -117,11 +118,18 @@ async function renderReviewItem(
 	if (item.instruction) body.createDiv({ cls: "examiner-instruction", text: item.instruction });
 	const yourAnswer = outcome === "unanswered" ? "No answer" : item.response;
 	if (item.kind === "flashcard") {
-		renderAnswerComparison(body, yourAnswer, item.expectedDisplay);
+		renderAnswerComparison(body, yourAnswer, item.expectedDisplay, undefined, item.working);
 		renderTags(body, item.tags);
+		renderCopyRow(body, item);
 		return;
 	}
-	renderAnswerComparison(body, yourAnswer, item.expectedDisplay, item.note);
-	renderWorking(body, workedSteps({ inputs: item.inputs, steps: item.steps }), false);
+	renderAnswerComparison(body, yourAnswer, item.expectedDisplay, item.note, item.working);
+	renderWorking(body, workedSteps({ inputs: item.inputs, steps: item.steps }), false, "Formula");
 	renderTags(body, item.tags);
+	renderCopyRow(body, item);
+}
+
+function renderCopyRow(body: HTMLElement, item: ExamItemResult): void {
+	const row = body.createDiv({ cls: "examiner-feedback-actions" });
+	textButton(row, "Copy").addEventListener("click", () => void copyText(attemptText(item)));
 }

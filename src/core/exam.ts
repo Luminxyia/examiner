@@ -9,7 +9,7 @@ import {
 	type ValidationIssue,
 } from "./definition";
 import { awardedMarks, chosenOption, drawFlashcard, expectedFlashcardAnswer, type Judgement } from "./flashcard";
-import { GenerationError, generateInstance, type QuestionInstance, type RandomSource, type StepResult } from "./generate";
+import { GenerationError, generateInstance, workedSteps, type QuestionInstance, type RandomSource, type StepResult } from "./generate";
 import { parseNumberInput } from "./numbers";
 import { shuffled } from "./random";
 
@@ -130,6 +130,35 @@ export interface ExamItemResult {
 	response: string;
 	outcome: ItemOutcome;
 	note?: string;
+	working?: string;
+}
+
+export type AttemptTextSource = Pick<ExamItemResult, "prompt" | "response" | "outcome" | "expectedDisplay" | "working" | "inputs" | "steps">;
+
+const COPIED_OUTCOME_LABELS: Record<"correct" | "partial" | "incorrect", string> = {
+	correct: "correct",
+	partial: "partially correct",
+	incorrect: "incorrect",
+};
+
+function copiedAnswerLine(source: AttemptTextSource): string {
+	if (source.outcome === "unknown") return `My answer: I don't know, expected ${source.expectedDisplay}`;
+	if (source.outcome === "unanswered") return `My answer: No answer, expected ${source.expectedDisplay}`;
+	return `My answer: ${source.response} (${COPIED_OUTCOME_LABELS[source.outcome]}), expected ${source.expectedDisplay}`;
+}
+
+export function attemptText(source: AttemptTextSource): string {
+	const lines = [`Question: ${source.prompt}`, copiedAnswerLine(source)];
+	if (source.working) {
+		lines.push("My working:");
+		lines.push(source.working);
+	}
+	const correctSteps = workedSteps({ inputs: source.inputs, steps: source.steps });
+	if (correctSteps.length > 0) {
+		lines.push("Correct steps:");
+		lines.push(...correctSteps);
+	}
+	return lines.join("\n");
 }
 
 export interface ScoreGroup {
@@ -174,6 +203,7 @@ export function markExam(
 	responses: readonly string[],
 	dontKnow: readonly boolean[] = [],
 	judgements: Judgements = [],
+	workings: readonly string[] = [],
 ): ExamItemResult[] {
 	const remaining = pendingMarking(items, responses, dontKnow).filter((index) => !judgements[index]).length;
 	if (remaining > 0) throw new MarkingIncompleteError(remaining);
@@ -181,7 +211,9 @@ export function markExam(
 		const marks = itemMarks(item);
 		const unknown = Boolean(dontKnow[index]);
 		const response = unknown ? "" : (responses[index] ?? "").trim();
-		const scored = <T extends { outcome: ItemOutcome }>(result: T): T & { marks: number; awarded: number } => ({
+		const working = (workings[index] ?? "").trim();
+		const workingField = working === "" ? {} : { working };
+		const scored =<T extends { outcome: ItemOutcome }>(result: T): T & { marks: number; awarded: number } => ({
 			...result,
 			marks,
 			awarded: result.outcome === "correct" ? marks : 0,
@@ -202,6 +234,7 @@ export function markExam(
 				answer: Number.NaN,
 				expectedDisplay: expectedFlashcardAnswer(item),
 				response,
+				...workingField,
 			};
 			if (unknown) return scored({ ...base, outcome: "unknown" });
 			if (response === "") return scored({ ...base, outcome: "unanswered" });
@@ -226,6 +259,7 @@ export function markExam(
 			answer: item.instance.answer,
 			expectedDisplay: formatExpectedAnswer(item.answerRule, item.instance.answer, item.scientific),
 			response,
+			...workingField,
 		};
 		if (unknown) return scored({ ...base, outcome: "unknown" });
 		if (response === "") return scored({ ...base, outcome: "unanswered" });

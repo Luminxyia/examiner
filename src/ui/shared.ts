@@ -1,4 +1,4 @@
-import { MarkdownRenderer, Modal, setIcon, Setting, setTooltip, type App, type Component, type WorkspaceLeaf } from "obsidian";
+import { MarkdownRenderer, Modal, Notice, setIcon, Setting, setTooltip, type App, type Component, type WorkspaceLeaf } from "obsidian";
 import type ExaminerPlugin from "../main";
 
 export async function renderMarkdown(app: App, container: HTMLElement, markdown: string, component: Component): Promise<void> {
@@ -21,22 +21,53 @@ export function section(parent: HTMLElement, title: string, note?: string, contr
 	return element;
 }
 
-export function renderAnswerComparison(parent: HTMLElement, response: string, expected: string, note?: string): void {
+export function renderAnswerComparison(parent: HTMLElement, response: string, expected: string, note?: string, working?: string): void {
 	const list = parent.createEl("dl", { cls: "examiner-comparison" });
 	list.createEl("dt", { text: "Your answer" });
 	list.createEl("dd", { text: response });
+	if (working) {
+		list.createEl("dt", { text: "Your workings" });
+		list.createEl("dd", { text: working });
+	}
 	list.createEl("dt", { text: "Expected" });
 	list.createEl("dd", { text: expected });
 	if (note) parent.createDiv({ cls: "examiner-muted examiner-small", text: note });
 }
 
-export function renderWorking(parent: HTMLElement, lines: readonly string[], open: boolean): void {
+export function renderWorking(parent: HTMLElement, lines: readonly string[], open: boolean, label = "Working"): void {
 	if (lines.length === 0) return;
 	const details = parent.createEl("details", { cls: "examiner-working" });
 	details.open = open;
-	details.createEl("summary", { text: "Working" });
+	details.createEl("summary", { text: label });
 	const list = details.createEl("ol");
 	for (const line of lines) list.createEl("li", { text: line });
+}
+
+export function renderYourWorkings(parent: HTMLElement, working: string | undefined): void {
+	if (!working) return;
+	const details = parent.createEl("details", { cls: "examiner-working" });
+	details.open = true;
+	details.createEl("summary", { text: "Your workings" });
+	details.createDiv({ cls: "examiner-your-workings", text: working });
+}
+
+export function renderWorkingsInput(parent: HTMLElement, value: string, onInput: (value: string) => void): void {
+	const area = parent.createEl("textarea", {
+		cls: "examiner-textarea",
+		attr: { rows: "4", "aria-label": "Your workings", placeholder: "Your workings" },
+	});
+	area.value = value;
+	area.addEventListener("input", () => onInput(area.value));
+}
+
+export async function copyText(text: string): Promise<void> {
+	try {
+		await navigator.clipboard.writeText(text);
+		new Notice("Copied");
+	} catch (error) {
+		console.error("Examiner: could not copy to the clipboard", error);
+		new Notice("Could not copy to the clipboard.");
+	}
 }
 
 export type Tone = "success" | "error" | "warning" | "muted";

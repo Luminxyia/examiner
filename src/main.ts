@@ -26,6 +26,7 @@ import { QuestionEditorView, VIEW_TYPE_QUESTION_EDITOR, type EditorDraft, type Q
 import { QuestionPickerModal } from "./ui/question-picker";
 import { QuestionsView, VIEW_TYPE_QUESTIONS } from "./ui/questions-view";
 import { TutorView, VIEW_TYPE_TUTOR } from "./ui/tutor-view";
+import { UpcomingExamEditorView, VIEW_TYPE_UPCOMING_EXAM_EDITOR, type UpcomingExamEditorState } from "./ui/upcoming-exam-editor-view";
 import type { ExaminerSection } from "./ui/shared";
 
 export default class ExaminerPlugin extends Plugin {
@@ -84,6 +85,7 @@ export default class ExaminerPlugin extends Plugin {
 		this.registerView(VIEW_TYPE_EXAM_EDITOR, (leaf) => new ExamEditorView(leaf, this));
 		this.registerView(VIEW_TYPE_QUESTIONS, (leaf) => new QuestionsView(leaf, this));
 		this.registerView(VIEW_TYPE_TUTOR, (leaf) => new TutorView(leaf, this));
+		this.registerView(VIEW_TYPE_UPCOMING_EXAM_EDITOR, (leaf) => new UpcomingExamEditorView(leaf, this));
 
 		this.addRibbonIcon("graduation-cap", "Examiner", () => void this.openOverview());
 
@@ -423,6 +425,11 @@ export default class ExaminerPlugin extends Plugin {
 		this.pendingExamDraft = draft;
 		const state: ExamEditorState = { draft: true };
 		await this.openView({ type: VIEW_TYPE_EXAM_EDITOR, state: { ...state } });
+	}
+
+	async openUpcomingExamEditor(upcomingId?: string): Promise<void> {
+		const state: UpcomingExamEditorState = upcomingId ? { upcomingId } : {};
+		await this.openView({ type: VIEW_TYPE_UPCOMING_EXAM_EDITOR, state: { ...state } });
 	}
 
 	async openExamSession(): Promise<void> {

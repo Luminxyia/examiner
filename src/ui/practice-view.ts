@@ -1,6 +1,7 @@
 import { ItemView, Notice, type ViewStateResult, type WorkspaceLeaf } from "obsidian";
 import { answerInstruction, checkAnswer, formatExpectedAnswer, type AnswerCheck } from "../core/answer";
 import { hasErrors, validateDefinition, type QuestionDefinition } from "../core/definition";
+import { attemptText } from "../core/exam";
 import { drawFlashcard, expectedFlashcardAnswer, type FlashcardCard, type Judgement } from "../core/flashcard";
 import { GenerationError, generateInstance, workedSteps, type QuestionInstance } from "../core/generate";
 import { parseNumberInput } from "../core/numbers";
@@ -9,7 +10,19 @@ import type ExaminerPlugin from "../main";
 import { createId } from "../storage/format-shared";
 import type { PracticeAttemptRecord } from "../storage/results";
 import { renderQuestionImages } from "./attachment-picker";
-import { iconAction, renderAnswerComparison, renderEmptyState, renderLoadState, renderMarkdown, renderTags, renderWorking, textButton } from "./shared";
+import {
+	copyText,
+	iconAction,
+	renderAnswerComparison,
+	renderEmptyState,
+	renderLoadState,
+	renderMarkdown,
+	renderTags,
+	renderWorking,
+	renderWorkingsInput,
+	renderYourWorkings,
+	textButton,
+} from "./shared";
 
 export const VIEW_TYPE_PRACTICE = "examiner-practice";
 
@@ -46,6 +59,7 @@ export class PracticeView extends ItemView {
 	private card: FlashcardCard | null = null;
 	private submission: Submission | null = null;
 	private attempt: FlashcardAttempt | null = null;
+	private working = "";
 	private tally = { correct: 0, total: 0 };
 	private renderToken = 0;
 	private generatedFrom = "";
@@ -110,6 +124,7 @@ export class PracticeView extends ItemView {
 	private newVariation(): void {
 		this.submission = null;
 		this.attempt = null;
+		this.working = "";
 		this.instance = null;
 		this.card = null;
 		const question = this.question();
@@ -247,6 +262,19 @@ export class PracticeView extends ItemView {
 			message.empty();
 			input.removeClass("examiner-invalid");
 		});
+		this.renderWorkingsBox(parent);
+	}
+
+	private renderWorkingsBox(parent: HTMLElement): void {
+		renderWorkingsInput(parent, this.working, (value) => {
+			this.working = value;
+		});
+	}
+
+	private savedWorking(): { working?: string } {
+		const working = this.working.trim();
+		if (working === "") return {};
+		return { working };
 	}
 
 	private renderFeedback(parent: HTMLElement, question: QuestionDefinition, instance: QuestionInstance, submission: Submission): void {
@@ -258,12 +286,24 @@ export class PracticeView extends ItemView {
 		});
 		if (submission.check.hint) feedback.createDiv({ cls: "examiner-small", text: submission.check.hint });
 
-		if (submission.revealed) {
-			renderAnswerComparison(feedback, submission.response, formatExpectedAnswer(question.answer, instance.answer, question.scientific));
-			renderWorking(feedback, workedSteps(instance), !correct);
-		}
+		const expected = formatExpectedAnswer(question.answer, instance.answer, question.scientific);
+		if (submission.revealed) renderAnswerComparison(feedback, submission.response, expected);
+		renderYourWorkings(feedback, this.working.trim());
+		if (submission.revealed) renderWorking(feedback, workedSteps(instance), !correct);
 
 		const actions = parent.createDiv({ cls: "examiner-feedback-actions" });
+		if (submission.revealed) {
+			const text = attemptText({
+				prompt: instance.prompt,
+				response: submission.response,
+				outcome: correct ? "correct" : "incorrect",
+				expectedDisplay: expected,
+				...this.savedWorking(),
+				inputs: instance.inputs,
+				steps: instance.steps,
+			});
+			textButton(actions, "Copy").addEventListener("click", () => void copyText(text));
+		}
 		if (!submission.check.correct) {
 			const retry = textButton(actions, "Try again");
 			retry.addEventListener("click", () => {
@@ -310,7 +350,10 @@ export class PracticeView extends ItemView {
 				});
 			}
 		}
-		if (!attempt) return;
+		if (!attempt) {
+			this.renderWorkingsBox(parent);
+			return;
+		}
 
 		const feedback = parent.createDiv({ cls: "examiner-feedback" });
 		if (attempt.outcome) {
@@ -320,6 +363,7 @@ export class PracticeView extends ItemView {
 			});
 		}
 		renderAnswerComparison(feedback, attempt.response === "" ? "No answer" : attempt.response, expectedFlashcardAnswer(card));
+		renderYourWorkings(feedback, this.working.trim());
 
 		const actions = parent.createDiv({ cls: "examiner-feedback-actions" });
 		if (attempt.outcome === null) {
@@ -334,6 +378,16 @@ export class PracticeView extends ItemView {
 			}
 			return;
 		}
+		const text = attemptText({
+			prompt: card.prompt,
+			response: attempt.response,
+			outcome: attempt.outcome,
+			expectedDisplay: expectedFlashcardAnswer(card),
+			...this.savedWorking(),
+			inputs: {},
+			steps: [],
+		});
+		textButton(actions, "Copy").addEventListener("click", () => void copyText(text));
 		if (attempt.outcome !== "correct" && card.mode === "choice") {
 			textButton(actions, "Try again").addEventListener("click", () => {
 				this.attempt = null;
@@ -370,6 +424,7 @@ export class PracticeView extends ItemView {
 			response,
 			correct: outcome === "correct",
 			outcome,
+			...this.savedWorking(),
 		});
 	}
 
@@ -397,6 +452,7 @@ export class PracticeView extends ItemView {
 			expectedDisplay: formatExpectedAnswer(question.answer, instance.answer, question.scientific),
 			response: submission.response,
 			correct: submission.check.correct,
+			...this.savedWorking(),
 		};
 		await this.save(record);
 	}

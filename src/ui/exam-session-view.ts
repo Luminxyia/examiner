@@ -11,7 +11,7 @@ import { toAttemptSummary, type ExamMarking, type ExamResultRecord, type ExamSes
 import { OUTCOME_LABELS, renderExamResult } from "./exam-results";
 import { ReferenceViewerModal } from "./reference-viewer-modal";
 import { renderQuestionImages } from "./attachment-picker";
-import { confirm, formatClock, formatMarks, renderEmptyState, renderMarkdown, textButton } from "./shared";
+import { confirm, formatClock, formatMarks, renderEmptyState, renderMarkdown, renderWorkingsInput, textButton } from "./shared";
 
 export const VIEW_TYPE_EXAM_SESSION = "examiner-exam-session";
 
@@ -278,6 +278,12 @@ export class ExamSessionView extends ItemView {
 			next.addEventListener("click", () => void this.goTo(index + 1));
 		}
 
+		const workings = (session.workings ??= session.items.map(() => ""));
+		renderWorkingsInput(card, workings[index] ?? "", (value) => {
+			workings[index] = value;
+			this.persist();
+		});
+
 		this.navEl = root.createDiv({ cls: "examiner-session-nav", attr: { role: "navigation", "aria-label": "Questions" } });
 		this.renderNav(session);
 	}
@@ -404,7 +410,7 @@ export class ExamSessionView extends ItemView {
 		const attemptId = session.attemptId ?? createId("r");
 		let items;
 		try {
-			items = markExam(session.items, session.responses, session.dontKnow, marking.judgements);
+			items = markExam(session.items, session.responses, session.dontKnow, marking.judgements, session.workings);
 		} catch (error) {
 			if (!(error instanceof MarkingIncompleteError)) throw error;
 			new Notice(error.message);

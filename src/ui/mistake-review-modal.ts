@@ -1,9 +1,10 @@
 import { Component, Modal, Setting } from "obsidian";
+import { attemptText } from "../core/exam";
 import { workedSteps } from "../core/generate";
 import { describeMisses, type MistakeEntry } from "../core/insights";
 import type ExaminerPlugin from "../main";
 import { renderQuestionImages } from "./attachment-picker";
-import { formatDateTime, renderAnswerComparison, renderMarkdown, renderTags, renderWorking } from "./shared";
+import { copyText, formatDateTime, renderAnswerComparison, renderMarkdown, renderTags, renderWorking, renderYourWorkings } from "./shared";
 
 export class MistakeReviewModal extends Modal {
 	private renderToken = 0;
@@ -47,6 +48,7 @@ export class MistakeReviewModal extends Modal {
 		renderQuestionImages(body, this.plugin.questionImageAccess, mistake.questionId, example.images);
 		if (example.instruction) body.createDiv({ cls: "examiner-instruction", text: example.instruction });
 		renderAnswerComparison(body, example.response === "" ? "No answer" : example.response, example.expectedDisplay, example.note);
+		renderYourWorkings(body, example.working);
 		renderWorking(body, workedSteps({ inputs: example.inputs, steps: example.steps }), true);
 		renderTags(body, mistake.tags);
 
@@ -69,6 +71,7 @@ export class MistakeReviewModal extends Modal {
 					.onClick(() => this.move(1)),
 			);
 		}
+		footer.addButton((button) => button.setButtonText("Copy").onClick(() => void copyText(attemptText(example))));
 		footer.addButton((button) =>
 			button
 				.setButtonText("Practice again")

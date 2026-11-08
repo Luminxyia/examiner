@@ -1,4 +1,5 @@
 import type { ExamItem, ExamItemResult, ExamSummary } from "../core/exam";
+import type { UpcomingExam } from "../core/exam-prep";
 import type { Judgement } from "../core/flashcard";
 import type { StepResult } from "../core/generate";
 import type { AttemptSummary } from "../core/statistics";
@@ -22,6 +23,7 @@ export interface PracticeAttemptRecord {
 	correct: boolean;
 	kind?: "flashcard";
 	outcome?: Judgement;
+	working?: string;
 }
 
 export interface ExamResultRecord {
@@ -49,6 +51,7 @@ export interface ExamSession {
 	items: ExamItem[];
 	responses: string[];
 	dontKnow?: boolean[];
+	workings?: string[];
 	current: number;
 	marking?: ExamMarking;
 	attachments?: string[];
@@ -101,6 +104,22 @@ export function isStudySessionRecord(value: unknown): value is StudySessionRecor
 		isDate(value.endedAt) &&
 		isFiniteNumber(value.activeMs) &&
 		value.activeMs >= 0
+	);
+}
+
+function isStringList(value: unknown): value is string[] {
+	return Array.isArray(value) && value.every((entry) => typeof entry === "string");
+}
+
+function isUpcomingExam(value: unknown): value is UpcomingExam {
+	return (
+		isObject(value) &&
+		typeof value.id === "string" &&
+		typeof value.title === "string" &&
+		typeof value.date === "string" &&
+		isFiniteNumber(value.targetPercent) &&
+		isStringList(value.questionIds) &&
+		isStringList(value.examIds)
 	);
 }
 
@@ -157,6 +176,10 @@ export class ResultsStore {
 
 	private get timerPath(): string {
 		return `${this.folder}/study-timer.json`;
+	}
+
+	private get upcomingPath(): string {
+		return `${this.folder}/upcoming-exams.json`;
 	}
 
 	async recordPracticeAttempt(record: PracticeAttemptRecord): Promise<void> {
@@ -227,7 +250,7 @@ export class ResultsStore {
 	clearAll(): Promise<void> {
 		return this.serially(async () => {
 			try {
-				for (const path of [this.practicePath, this.examPath, this.studyPath, this.sessionPath, this.timerPath]) {
+				for (const path of [this.practicePath, this.examPath, this.studyPath, this.sessionPath, this.timerPath, this.upcomingPath]) {
 					if (await this.files.exists(path)) await this.files.remove(path);
 				}
 			} finally {
@@ -272,6 +295,33 @@ export class ResultsStore {
 			console.error("Examiner: could not read the saved study timer", error);
 			return null;
 		}
+	}
+
+	async readUpcomingExams(): Promise<UpcomingExam[]> {
+		if (!(await this.files.exists(this.upcomingPath))) return [];
+		const stored: unknown = JSON.parse(await this.files.read(this.upcomingPath));
+		if (!Array.isArray(stored)) throw new Error(`${this.upcomingPath} does not contain a list.`);
+		return stored.filter(isUpcomingExam);
+	}
+
+	saveUpcomingExam(exam: UpcomingExam): Promise<void> {
+		return this.serially(async () => {
+			const exams = await this.readUpcomingExams();
+			const index = exams.findIndex((existing) => existing.id === exam.id);
+			if (index === -1) exams.push(exam);
+			else exams[index] = exam;
+			await this.files.write(this.upcomingPath, JSON.stringify(exams, null, "\t"));
+			this.notify();
+		});
+	}
+
+	deleteUpcomingExam(id: string): Promise<void> {
+		return this.serially(async () => {
+			const exams = await this.readUpcomingExams();
+			const remaining = exams.filter((exam) => exam.id !== id);
+			await this.files.write(this.upcomingPath, JSON.stringify(remaining, null, "\t"));
+			this.notify();
+		});
 	}
 
 	private async appendLine(path: string, record: object): Promise<void> {

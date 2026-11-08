@@ -1,6 +1,7 @@
 import { ItemView, Notice, type WorkspaceLeaf } from "obsidian";
 import { groupAttemptsByExam } from "../core/statistics";
 import { DEFAULT_PASSING_PERCENT, type ExamDefinition } from "../core/exam";
+import { collectPrepAttempts, type UpcomingExam } from "../core/exam-prep";
 import {
 	aggregateMistakes,
 	aggregateTopics,
@@ -18,7 +19,8 @@ import {
 } from "../core/insights";
 import type ExaminerPlugin from "../main";
 import { createId } from "../storage/format-shared";
-import { toAttemptSummary, type ExamResultRecord } from "../storage/results";
+import { toAttemptSummary, type ExamResultRecord, type PracticeAttemptRecord } from "../storage/results";
+import { renderExamBoard } from "./exam-board";
 import { MistakeReviewModal } from "./mistake-review-modal";
 import { startExam } from "./start-exam";
 import { formatPercent, renderEmptyState, renderSectionNav, renderStudyTimerButton, section, textButton, updateStudyTimerButton } from "./shared";
@@ -44,6 +46,7 @@ export class TutorView extends ItemView {
 	private renderToken = 0;
 	private showAllMistakes = false;
 	private timerButton: HTMLButtonElement | null = null;
+	private selectedUpcomingId: string | null = null;
 
 	constructor(
 		leaf: WorkspaceLeaf,
@@ -83,8 +86,12 @@ export class TutorView extends ItemView {
 
 		const now = new Date();
 		let records: ExamResultRecord[];
+		let practiceAttempts: PracticeAttemptRecord[];
+		let upcomingExams: UpcomingExam[];
 		try {
 			records = await this.plugin.results.readExamResults();
+			practiceAttempts = await this.plugin.results.readPracticeAttempts();
+			upcomingExams = await this.plugin.results.readUpcomingExams();
 		} catch (error) {
 			console.error("Examiner: could not read exam results", error);
 			renderEmptyState(root, "Your exam results could not be read. See the developer console for details.");
@@ -96,6 +103,10 @@ export class TutorView extends ItemView {
 		const groups = groupAttemptsByExam(records.map(toAttemptSummary), (examId) => this.plugin.exams.get(examId)?.title);
 		const mistakes = aggregateMistakes(records, now);
 		const priorities = studyPriorities(groups, records, (examId) => this.passingPercent(examId), now);
+		renderExamBoard(root, this.plugin, upcomingExams, collectPrepAttempts(records, practiceAttempts), records.map(toAttemptSummary), now, this.selectedUpcomingId, (examId) => {
+			this.selectedUpcomingId = examId;
+			void this.render();
+		});
 		this.renderFocus(root, recommendNext(priorities, mistakes, this.plugin.exams.definitions().length > 0), priorities, mistakes);
 		if (mistakes.length > 0) this.renderMistakes(root, mistakes);
 		this.contentEl.replaceChildren(root);

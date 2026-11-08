@@ -1241,6 +1241,22 @@ button.examiner-judgement.is-active {
 	margin: var(--size-2-2) 0;
 }
 
+.examiner-upcoming-available {
+	flex: 1 1 0;
+}
+
+@container (max-width: 760px) {
+	.examiner-upcoming-available {
+		flex: 0 0 auto;
+		max-height: 18rem;
+	}
+}
+
+.examiner-review-body .examiner-working > summary {
+	color: var(--text-normal);
+	font-size: inherit;
+}
+
 .examiner-table-scroll {
 	max-height: 18rem;
 	overflow-y: auto;
@@ -1971,6 +1987,39 @@ button.examiner-show-more {
 
 .examiner-next-step > .examiner-header-actions {
 	margin-top: var(--size-2-3);
+}
+
+.examiner-board {
+	gap: var(--size-4-3);
+}
+
+.examiner-board-row {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--size-2-3) var(--size-4-3);
+}
+
+.examiner-board-side {
+	display: flex;
+	align-items: center;
+	gap: var(--size-2-3);
+}
+
+.examiner-board-tiles {
+	--examiner-cell: 11px;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 3px;
+}
+
+.examiner-your-workings {
+	margin-top: var(--size-2-3);
+	font-family: var(--font-monospace);
+	font-size: var(--font-ui-small);
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
 }
 
 .examiner-checkbox-field {
