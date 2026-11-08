@@ -1,6 +1,6 @@
 {
   "name": "examiner",
-  "version": "0.1.0",
+  "version": "1.0.2",
   "description": "Reusable, randomised practice questions and exams for Obsidian.",
   "private": true,
   "type": "module",
