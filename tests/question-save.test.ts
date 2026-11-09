@@ -2,18 +2,18 @@ import { describe, expect, it } from "vitest";
 import { questionSaveAction, type QuestionDefinition } from "../src/core/definition";
 import { prepareExam } from "../src/core/exam";
 import { createId } from "../src/storage/format-shared";
-import { DefinitionLibrary } from "../src/storage/library";
-import { parseQuestionFile, serializeQuestion } from "../src/storage/question-format";
-import { FakeFolderFiles } from "./fake-files";
+import { JsonLibrary } from "../src/storage/json-library";
+import { parseQuestionRecord, questionRecord } from "../src/storage/question-format";
+import { FakeDataFiles } from "./fake-files";
 import { basicAddition, seededRandom } from "./helpers";
 
-const FOLDER = "plugin/questions";
+const PATH = "plugin/questions.json";
 
-function questionLibrary(files: FakeFolderFiles): DefinitionLibrary<QuestionDefinition> {
-	return new DefinitionLibrary(files, { kind: "question", parse: parseQuestionFile, serialize: serializeQuestion }, FOLDER);
+function questionLibrary(files: FakeDataFiles): JsonLibrary<QuestionDefinition> {
+	return new JsonLibrary(files, { collection: "questions", parse: parseQuestionRecord, toRecord: questionRecord }, PATH);
 }
 
-async function saveLikeTheEditor(library: DefinitionLibrary<QuestionDefinition>, draft: QuestionDefinition): Promise<QuestionDefinition> {
+async function saveLikeTheEditor(library: JsonLibrary<QuestionDefinition>, draft: QuestionDefinition): Promise<QuestionDefinition> {
 	const definition = { ...structuredClone(draft), title: draft.title.trim() };
 	const stored = library.get(definition.id) ?? null;
 	const action = questionSaveAction(stored, definition.title);
@@ -41,33 +41,30 @@ describe("questionSaveAction", () => {
 
 describe("saving an edited question", () => {
 	it("updates the original when the title is unchanged", async () => {
-		const files = new FakeFolderFiles();
+		const files = new FakeDataFiles();
 		const library = questionLibrary(files);
 		const original = await saveLikeTheEditor(library, basicAddition({ id: "q-orig" }));
 		await saveLikeTheEditor(library, { ...original, prompt: "What is {x} plus {y}?" });
 		await saveLikeTheEditor(library, { ...original, marks: 3 });
 		expect(library.definitions()).toHaveLength(1);
 		expect(library.get("q-orig")).toMatchObject({ title: "Basic addition", marks: 3 });
-		expect([...files.files.keys()]).toEqual([`${FOLDER}/Basic addition.md`]);
 	});
 
 	it("saves a renamed question as a new question and leaves the original untouched", async () => {
-		const files = new FakeFolderFiles();
+		const files = new FakeDataFiles();
 		const library = questionLibrary(files);
 		const original = await saveLikeTheEditor(library, basicAddition({ id: "q-orig" }));
-		const originalFile = files.content(`${FOLDER}/Basic addition.md`);
 
 		const copy = await saveLikeTheEditor(library, { ...original, title: "Harder addition", prompt: "What is {x} + {y} + 1?" });
 
 		expect(copy.id).not.toBe("q-orig");
 		expect(copy).toMatchObject({ title: "Harder addition", prompt: "What is {x} + {y} + 1?" });
-		expect(files.content(`${FOLDER}/Basic addition.md`)).toBe(originalFile);
 		expect(library.get("q-orig")).toMatchObject({ title: "Basic addition", prompt: "What is {x} + {y}?" });
 		expect(library.definitions()).toHaveLength(2);
 	});
 
 	it("does not keep creating copies once the renamed question has been saved", async () => {
-		const library = questionLibrary(new FakeFolderFiles());
+		const library = questionLibrary(new FakeDataFiles());
 		const original = await saveLikeTheEditor(library, basicAddition({ id: "q-orig" }));
 		const copy = await saveLikeTheEditor(library, { ...original, title: "Renamed" });
 		await saveLikeTheEditor(library, { ...copy, marks: 2 });
@@ -77,7 +74,7 @@ describe("saving an edited question", () => {
 	});
 
 	it("keeps exams pointing at the original question", async () => {
-		const library = questionLibrary(new FakeFolderFiles());
+		const library = questionLibrary(new FakeDataFiles());
 		const original = await saveLikeTheEditor(library, basicAddition({ id: "q-orig" }));
 		await saveLikeTheEditor(library, { ...original, title: "Renamed" });
 		const { items, missing } = prepareExam(

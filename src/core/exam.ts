@@ -26,6 +26,7 @@ export interface ExamDefinition {
 	passingPercent: number;
 	questions: ExamQuestionRef[];
 	attachments?: string[];
+	formulaSheet?: string;
 	shuffle?: boolean;
 }
 

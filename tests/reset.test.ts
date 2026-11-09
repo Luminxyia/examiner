@@ -1,14 +1,14 @@
 import { describe, expect, it } from "vitest";
 import type { QuestionDefinition } from "../src/core/definition";
 import { StudyTracker, type StudySessionRecord } from "../src/core/study-time";
-import { DefinitionLibrary } from "../src/storage/library";
-import { parseQuestionFile, serializeQuestion } from "../src/storage/question-format";
+import { JsonLibrary } from "../src/storage/json-library";
+import { parseQuestionRecord, questionRecord } from "../src/storage/question-format";
 import { ResultsStore, type ExamResultRecord } from "../src/storage/results";
-import { FakeDataFiles, FakeFolderFiles } from "./fake-files";
+import { FakeDataFiles } from "./fake-files";
 import { basicAddition } from "./helpers";
 
-const FOLDER = "plugin/questions";
-const format = { kind: "question" as const, parse: parseQuestionFile, serialize: serializeQuestion };
+const PATH = "plugin/questions.json";
+const format = { collection: "questions", parse: parseQuestionRecord, toRecord: questionRecord };
 
 const result: ExamResultRecord = {
 	version: 1,
@@ -24,15 +24,13 @@ const result: ExamResultRecord = {
 };
 
 describe("resetting plugin data", () => {
-	it("moves every question file in the plugin folder to the trash and nothing else", async () => {
-		const files = new FakeFolderFiles();
+	it("removes every question and leaves other files alone", async () => {
+		const files = new FakeDataFiles();
 		files.files.set("Notes/My note.md", "# Untouched");
 		files.files.set("plugin/data.json", "{}");
-		const library = new DefinitionLibrary<QuestionDefinition>(files, format, FOLDER);
+		const library = new JsonLibrary<QuestionDefinition>(files, format, PATH);
 		await library.create(basicAddition());
 		await library.create(basicAddition({ id: "q-second" }));
-		files.files.set(`${FOLDER}/broken.md`, "not a question");
-		await library.load();
 		let notified = 0;
 		library.onChange(() => notified++);
 
@@ -40,22 +38,21 @@ describe("resetting plugin data", () => {
 
 		expect(library.definitions()).toEqual([]);
 		expect(library.problems()).toEqual([]);
-		expect([...files.files.keys()]).toEqual(["Notes/My note.md", "plugin/data.json"]);
-		expect(files.trashed).toHaveLength(3);
+		expect(JSON.parse(files.files.get(PATH) ?? "null")).toEqual({ version: 1, questions: {} });
+		expect(files.files.get("Notes/My note.md")).toBe("# Untouched");
+		expect(files.files.get("plugin/data.json")).toBe("{}");
 		expect(notified).toBe(1);
 	});
 
-	it("still reflects what is left when a file cannot be removed", async () => {
-		const files = new FakeFolderFiles();
-		const library = new DefinitionLibrary<QuestionDefinition>(files, format, FOLDER);
+	it("still reflects what is stored when clearing fails", async () => {
+		const files = new FakeDataFiles();
+		const library = new JsonLibrary<QuestionDefinition>(files, format, PATH);
 		await library.create(basicAddition());
 		await library.create(basicAddition({ id: "q-second" }));
-		const trash = files.trash.bind(files);
-		let calls = 0;
-		files.trash = (path) => (++calls === 2 ? Promise.reject(new Error("Locked")) : trash(path));
+		files.write = () => Promise.reject(new Error("Locked"));
 
 		await expect(library.clear()).rejects.toThrow("Locked");
-		expect(library.definitions()).toHaveLength(1);
+		expect(library.definitions()).toHaveLength(2);
 	});
 
 	it("deletes results, study history and the exam in progress, and reads them back as empty", async () => {

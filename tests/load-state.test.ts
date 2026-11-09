@@ -1,16 +1,16 @@
 import { describe, expect, it } from "vitest";
 import type { QuestionDefinition } from "../src/core/definition";
-import { DefinitionLibrary } from "../src/storage/library";
+import { JsonLibrary } from "../src/storage/json-library";
 import { LoadState } from "../src/storage/load-state";
-import { parseQuestionFile, serializeQuestion } from "../src/storage/question-format";
-import { FakeFolderFiles } from "./fake-files";
+import { parseQuestionRecord, questionRecord } from "../src/storage/question-format";
+import { FakeDataFiles } from "./fake-files";
 import { basicAddition } from "./helpers";
 
-const FOLDER = "plugin/questions";
-const format = { kind: "question" as const, parse: parseQuestionFile, serialize: serializeQuestion };
+const PATH = "plugin/questions.json";
+const format = { collection: "questions", parse: parseQuestionRecord, toRecord: questionRecord };
 
-function questionLibrary(files = new FakeFolderFiles()): DefinitionLibrary<QuestionDefinition> {
-	return new DefinitionLibrary(files, format, FOLDER);
+function questionLibrary(files = new FakeDataFiles()): JsonLibrary<QuestionDefinition> {
+	return new JsonLibrary(files, format, PATH);
 }
 
 describe("LoadState", () => {
@@ -25,7 +25,7 @@ describe("LoadState", () => {
 	});
 
 	it("tells a view about readiness even when the library changed while it was still loading", async () => {
-		const files = new FakeFolderFiles();
+		const files = new FakeDataFiles();
 		await questionLibrary(files).create(basicAddition());
 		const library = questionLibrary(files);
 		const state = new LoadState();
@@ -48,11 +48,11 @@ describe("LoadState", () => {
 	});
 
 	it("reports a failure instead of loading forever, and recovers on retry", async () => {
-		const files = new FakeFolderFiles();
+		const files = new FakeDataFiles();
 		await questionLibrary(files).create(basicAddition());
 		const library = questionLibrary(files);
-		const list = files.list.bind(files);
-		files.list = () => Promise.reject(new Error("Disk unavailable"));
+		const read = files.read.bind(files);
+		files.read = () => Promise.reject(new Error("Disk unavailable"));
 		const state = new LoadState();
 		const seen: string[] = [];
 		state.onChange(() => seen.push(state.error ?? (state.ready ? "ready" : "loading")));
@@ -60,7 +60,7 @@ describe("LoadState", () => {
 		expect(await state.run(() => library.load())).toBe(false);
 		expect(state).toMatchObject({ ready: false, error: "Disk unavailable", loading: false });
 
-		files.list = list;
+		files.read = read;
 		expect(await state.run(() => library.load())).toBe(true);
 		expect(state).toMatchObject({ ready: true, error: null });
 		expect(library.definitions()).toHaveLength(1);

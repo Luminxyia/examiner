@@ -55,6 +55,7 @@ export interface ExamSession {
 	current: number;
 	marking?: ExamMarking;
 	attachments?: string[];
+	formulaSheet?: string;
 }
 
 export interface ExamMarking {

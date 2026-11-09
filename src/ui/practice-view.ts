@@ -351,7 +351,6 @@ export class PracticeView extends ItemView {
 			}
 		}
 		if (!attempt) {
-			this.renderWorkingsBox(parent);
 			return;
 		}
 
@@ -363,7 +362,6 @@ export class PracticeView extends ItemView {
 			});
 		}
 		renderAnswerComparison(feedback, attempt.response === "" ? "No answer" : attempt.response, expectedFlashcardAnswer(card));
-		renderYourWorkings(feedback, this.working.trim());
 
 		const actions = parent.createDiv({ cls: "examiner-feedback-actions" });
 		if (attempt.outcome === null) {

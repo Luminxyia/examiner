@@ -10,87 +10,79 @@ import {
 	type VariableSource,
 } from "../core/definition";
 import { normaliseTags } from "../core/tags";
-import { composeFile, readFrontmatter, type Frontmatter } from "./frontmatter";
 import { attachmentKind } from "./attachments";
-import { KEYS, readFileNames, readNumber, readString, readStringList, type ParseResult } from "./format-shared";
-
-export const QUESTION_FORMAT_VERSION = 2;
-
-const CALCULATION_FORMAT_VERSION = 1;
+import { asRecord, readFileNames, readNumber, readString, readStringList, type ParseResult } from "./format-shared";
 
 const STEP_PATTERN = /^\s*\{?\s*([^{}=\s]+)\s*\}?\s*=\s*([\s\S]*)$/;
 
-export function parseQuestionFile(content: string): ParseResult<QuestionDefinition> {
-	const read = readFrontmatter(content);
-	if (!read.ok) return { ok: false, errors: [read.error] };
-	const data = read.data;
+export function parseQuestionRecord(id: string, value: unknown): ParseResult<QuestionDefinition> {
+	const fields = asRecord(value);
+	if (fields === null) {
+		return { ok: false, errors: ["The question must be a set of properties."] };
+	}
 	const errors: string[] = [];
 
-	const version = data[KEYS.version];
-	if (version !== undefined && (typeof version !== "number" || version > QUESTION_FORMAT_VERSION)) {
-		return {
-			ok: false,
-			errors: [`This file uses format version ${JSON.stringify(version)}, which needs a newer version of Examiner.`],
-		};
-	}
-
-	const id = readString(data[KEYS.id]);
-	if (!id) errors.push(`Missing "${KEYS.id}".`);
-
-	const kind = readKind(data[KEYS.type], errors);
-	const rawMarks = data[KEYS.marks];
+	const kind = readKind(fields.type, errors);
+	const rawMarks = fields.marks;
 	const marks = rawMarks === undefined || rawMarks === null ? DEFAULT_MARKS : (readNumber(rawMarks) ?? Number.NaN);
-	const flashcard = kind === "flashcard" ? readFlashcard(data, errors) : blankFlashcard();
-	const variables = readVariables(data[KEYS.variables], errors);
-	const steps = readSteps(data[KEYS.steps], errors);
-	const answer = readAnswerRule(data[KEYS.answer], errors);
-	const tags = readStringList(data[KEYS.tags], KEYS.tags, errors);
-	const images = readFileNames(data[KEYS.images], KEYS.images, errors, (name) => attachmentKind(name) === "image");
+	const flashcard = kind === "flashcard" ? readFlashcard(fields, errors) : blankFlashcard();
+	const variables = readVariables(fields.variables, errors);
+	const steps = readSteps(fields.steps, errors);
+	const answer = readAnswerRule(fields.answer, errors);
+	const tags = readStringList(fields.tags, "tags", errors);
+	const images = readFileNames(fields.images, "images", errors, (name) => attachmentKind(name) === "image");
 
-	if (errors.length > 0 || !id) return { ok: false, errors };
+	if (errors.length > 0) return { ok: false, errors };
 	return {
 		ok: true,
 		definition: {
 			id,
 			kind,
-			title: readString(data[KEYS.title]) ?? "",
-			prompt: read.body.trim(),
+			title: readString(fields.title) ?? "",
+			prompt: readString(fields.prompt) ?? "",
 			variables,
 			steps,
 			answer,
 			flashcard,
 			marks,
-			...(data[KEYS.scientific] === true ? { scientific: true } : {}),
+			...(fields.scientific === true ? { scientific: true } : {}),
 			...(images.length > 0 ? { images } : {}),
 			tags: normaliseTags(tags),
 		},
 	};
 }
 
-export function serializeQuestion(definition: QuestionDefinition, previousContent?: string): string {
-	const previous = previousContent === undefined ? undefined : readFrontmatter(previousContent);
+export function questionRecord(definition: QuestionDefinition): Record<string, unknown> {
 	const isFlashcard = definition.kind === "flashcard";
 	const isChoice = isFlashcard && definition.flashcard.mode === "choice";
-	const managed: Frontmatter = {
-		[KEYS.kind]: "question",
-		[KEYS.version]: isFlashcard ? QUESTION_FORMAT_VERSION : CALCULATION_FORMAT_VERSION,
-		[KEYS.id]: definition.id,
-		[KEYS.type]: definition.kind,
-		[KEYS.title]: definition.title,
-		[KEYS.tags]: definition.tags,
-		[KEYS.marks]: writeNumber(definition.marks),
-		[KEYS.variables]: isFlashcard ? undefined : definition.variables.map(writeVariable),
-		[KEYS.steps]: isFlashcard ? undefined : definition.steps.map((step) => `{${step.target}} = ${step.expression.trim()}`),
-		[KEYS.answer]: isFlashcard ? undefined : writeAnswerRule(definition.answer),
-		[KEYS.scientific]: !isFlashcard && definition.scientific ? true : undefined,
-		[KEYS.images]: definition.images && definition.images.length > 0 ? definition.images : undefined,
-
-		[KEYS.answerMode]: isFlashcard ? (isChoice ? "multiple-choice" : "written") : undefined,
-		[KEYS.expectedAnswer]: isFlashcard && !isChoice ? definition.flashcard.answer.trim() : undefined,
-		[KEYS.options]: isChoice ? definition.flashcard.options.map((option) => option.trim()) : undefined,
-		[KEYS.correctOption]: isChoice ? writeNumber(definition.flashcard.correct + 1) : undefined,
+	const record: Record<string, unknown> = {
+		type: definition.kind,
+		title: definition.title,
+		tags: definition.tags,
+		marks: writeNumber(definition.marks),
+		prompt: definition.prompt.trim(),
 	};
-	return composeFile(managed, `${definition.prompt.trim()}\n`, previous?.ok ? previous.data : {});
+	if (isFlashcard) {
+		record.answerMode = isChoice ? "multiple-choice" : "written";
+	} else {
+		record.variables = definition.variables.map(writeVariable);
+		record.steps = definition.steps.map((step) => `{${step.target}} = ${step.expression.trim()}`);
+		record.answer = writeAnswerRule(definition.answer);
+	}
+	if (isFlashcard && !isChoice) {
+		record.expectedAnswer = definition.flashcard.answer.trim();
+	}
+	if (isChoice) {
+		record.options = definition.flashcard.options.map((option) => option.trim());
+		record.correctOption = writeNumber(definition.flashcard.correct + 1);
+	}
+	if (!isFlashcard && definition.scientific) {
+		record.scientific = true;
+	}
+	if (definition.images && definition.images.length > 0) {
+		record.images = definition.images;
+	}
+	return record;
 }
 
 function readKind(raw: unknown, errors: string[]): QuestionKind {
@@ -100,20 +92,20 @@ function readKind(raw: unknown, errors: string[]): QuestionKind {
 	return "calculation";
 }
 
-function readFlashcard(data: Frontmatter, errors: string[]): Flashcard {
+function readFlashcard(fields: Record<string, unknown>, errors: string[]): Flashcard {
 	const card = blankFlashcard();
-	const mode = data[KEYS.answerMode] ?? "written";
+	const mode = fields.answerMode ?? "written";
 	if (mode === "multiple-choice") card.mode = "choice";
 	else if (mode !== "written") errors.push(`Unknown answer mode ${JSON.stringify(mode)}. Use written or multiple-choice.`);
-	card.answer = readString(data[KEYS.expectedAnswer]) ?? "";
+	card.answer = readString(fields.expectedAnswer) ?? "";
 	if (card.mode === "choice") {
-		const options = data[KEYS.options];
+		const options = fields.options;
 		if (Array.isArray(options)) card.options = options.map((option) => readString(option) ?? "");
 		else {
 			card.options = [];
-			if (options !== undefined && options !== null) errors.push(`"${KEYS.options}" must be a list.`);
+			if (options !== undefined && options !== null) errors.push(`"options" must be a list.`);
 		}
-		const correct = readNumber(data[KEYS.correctOption]);
+		const correct = readNumber(fields.correctOption);
 		card.correct = correct === undefined ? -1 : correct - 1;
 	}
 	return card;
@@ -122,7 +114,7 @@ function readFlashcard(data: Frontmatter, errors: string[]): Flashcard {
 function readVariables(raw: unknown, errors: string[]): InputVariable[] {
 	if (raw === undefined || raw === null) return [];
 	if (!Array.isArray(raw)) {
-		errors.push(`"${KEYS.variables}" must be a list.`);
+		errors.push(`"variables" must be a list.`);
 		return [];
 	}
 	const variables: InputVariable[] = [];
@@ -159,7 +151,7 @@ function writeNumber(value: number): number | null {
 	return Number.isFinite(value) ? value : null;
 }
 
-function writeVariable(variable: InputVariable): Frontmatter {
+function writeVariable(variable: InputVariable): Record<string, unknown> {
 	const { source } = variable;
 	const name = variable.name;
 	switch (source.kind) {
@@ -175,7 +167,7 @@ function writeVariable(variable: InputVariable): Frontmatter {
 function readSteps(raw: unknown, errors: string[]): FormulaStep[] {
 	if (raw === undefined || raw === null) return [];
 	if (!Array.isArray(raw)) {
-		errors.push(`"${KEYS.steps}" must be a list.`);
+		errors.push(`"steps" must be a list.`);
 		return [];
 	}
 	const steps: FormulaStep[] = [];
@@ -193,7 +185,7 @@ function readSteps(raw: unknown, errors: string[]): FormulaStep[] {
 function readAnswerRule(raw: unknown, errors: string[]): AnswerRule {
 	if (raw === undefined || raw === null) return { check: "exact" };
 	if (typeof raw !== "object" || Array.isArray(raw)) {
-		errors.push(`"${KEYS.answer}" must be a set of properties, such as { check: rounded, places: 2 }.`);
+		errors.push(`"answer" must be a set of properties, such as { check: rounded, places: 2 }.`);
 		return { check: "exact" };
 	}
 	const fields = raw as Record<string, unknown>;
@@ -213,7 +205,7 @@ function readAnswerRule(raw: unknown, errors: string[]): AnswerRule {
 	}
 }
 
-function writeAnswerRule(rule: AnswerRule): Frontmatter {
+function writeAnswerRule(rule: AnswerRule): Record<string, unknown> {
 	switch (rule.check) {
 		case "exact":
 			return { check: "exact" };

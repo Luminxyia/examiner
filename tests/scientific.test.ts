@@ -4,8 +4,8 @@ import { blankFlashcard } from "../src/core/definition";
 import { markExam, prepareExam, type CalculationItem } from "../src/core/exam";
 import { evaluate, parseExpression } from "../src/core/expression";
 import { formatScientific, parseNumberInput } from "../src/core/numbers";
-import { parseQuestionFile, serializeQuestion } from "../src/storage/question-format";
-import { basicAddition, seededRandom } from "./helpers";
+import { questionRecord } from "../src/storage/question-format";
+import { basicAddition, roundTripQuestion, seededRandom } from "./helpers";
 
 describe("scientific notation answers", () => {
 	it.each([
@@ -68,19 +68,18 @@ describe("scientific notation display", () => {
 		expect(formatExpectedAnswer({ check: "exact" }, 0.0000017, true)).toBe("1.7 × 10^-6");
 	});
 
-	it("is saved with calculation questions and left off older files", () => {
+	it("is saved with calculation questions and left off other questions", () => {
 		const question = { ...basicAddition(), scientific: true };
-		const content = serializeQuestion(question);
-		expect(content).toContain("examiner-scientific-notation: true");
-		const parsed = parseQuestionFile(content);
+		expect(questionRecord(question).scientific).toBe(true);
+		const parsed = roundTripQuestion(question);
 		expect(parsed.ok && parsed.definition.scientific).toBe(true);
-		const plain = parseQuestionFile(serializeQuestion(basicAddition()));
+		const plain = roundTripQuestion(basicAddition());
 		expect(plain.ok && "scientific" in plain.definition).toBe(false);
 	});
 
 	it("is dropped from flashcards, which have no numeric answer", () => {
 		const card = { ...basicAddition(), kind: "flashcard" as const, flashcard: { ...blankFlashcard(), answer: "A" }, scientific: true };
-		expect(serializeQuestion(card)).not.toContain("examiner-scientific-notation");
+		expect(questionRecord(card)).not.toHaveProperty("scientific");
 	});
 
 	it("carries through to exam results", () => {

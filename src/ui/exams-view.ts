@@ -117,11 +117,11 @@ export class ExamsView extends ItemView {
 		if (problems.length === 0) return;
 		const details = parent.createEl("details", { cls: "examiner-problems" });
 		details.createEl("summary", {
-			text: problems.length === 1 ? "1 exam file needs attention" : `${problems.length} exam files need attention`,
+			text: problems.length === 1 ? "1 exam needs attention" : `${problems.length} exams need attention`,
 		});
 		for (const problem of problems) {
 			const row = details.createDiv({ cls: "examiner-problem" });
-			row.createEl("code", { text: problem.path });
+			row.createEl("code", { text: problem.id });
 			for (const error of problem.errors) row.createDiv({ cls: "examiner-error-text", text: error });
 		}
 	}
@@ -195,7 +195,7 @@ export class ExamsView extends ItemView {
 	private async delete(exam: ExamDefinition): Promise<void> {
 		const confirmed = await confirm(this.app, {
 			title: `Delete "${exam.title || "Untitled exam"}"?`,
-			message: "Its file will be moved to the trash. Past results are kept, and the questions are not affected.",
+			message: "Past results are kept, and the questions are not affected.",
 			confirmText: "Delete",
 			destructive: true,
 		});

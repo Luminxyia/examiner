@@ -4,16 +4,15 @@ import type { ExamDefinition } from "./core/exam";
 import { MIN_SESSION_MS, StudyTracker } from "./core/study-time";
 import { EXAMPLE_QUESTION } from "./example";
 import { DEFAULT_DATA_FOLDER, DEFAULT_SETTINGS, initialSettings, type ExaminerSettings } from "./settings";
-import { parseExamFile, serializeExam } from "./storage/exam-format";
-import { createId, fileKindOf } from "./storage/format-shared";
-import { DefinitionLibrary } from "./storage/library";
-import { parseQuestionFile, serializeQuestion } from "./storage/question-format";
+import { examRecord, parseExamRecord } from "./storage/exam-format";
+import { createId } from "./storage/format-shared";
+import { JsonLibrary } from "./storage/json-library";
+import { parseQuestionRecord, questionRecord } from "./storage/question-format";
 import { ResultsStore } from "./storage/results";
 import { AttachmentStore, renameVaultReferences, withRenamedReferences } from "./storage/attachments";
 import { VaultFiles } from "./storage/vault-files";
 import type { AttachmentAccess } from "./ui/attachment-picker";
 import { LoadState } from "./storage/load-state";
-import { AdapterFolderFiles } from "./storage/plugin-files";
 import { AttemptView, VIEW_TYPE_ATTEMPT, type AttemptViewState } from "./ui/attempt-view";
 import { ExamEditorView, VIEW_TYPE_EXAM_EDITOR, type ExamEditorState } from "./ui/exam-editor-view";
 import { ExamPickerModal } from "./ui/exam-picker";
@@ -31,8 +30,8 @@ import type { ExaminerSection } from "./ui/shared";
 
 export default class ExaminerPlugin extends Plugin {
 	override settings: ExaminerSettings = { ...DEFAULT_SETTINGS };
-	questions!: DefinitionLibrary<QuestionDefinition>;
-	exams!: DefinitionLibrary<ExamDefinition>;
+	questions!: JsonLibrary<QuestionDefinition>;
+	exams!: JsonLibrary<ExamDefinition>;
 	results!: ResultsStore;
 	attachments!: AttachmentStore;
 	questionImages!: AttachmentStore;
@@ -52,27 +51,23 @@ export default class ExaminerPlugin extends Plugin {
 			dataFolder = DEFAULT_DATA_FOLDER;
 		}
 		dataFolder = normalizePath(dataFolder);
-		const files = new AdapterFolderFiles(this.app.vault.adapter);
-		await files.ensureFolder(dataFolder);
-		this.questions = new DefinitionLibrary(
-			files,
-			{ kind: "question", parse: parseQuestionFile, serialize: serializeQuestion },
-			`${dataFolder}/questions`,
-			(previousName, newName) => this.renameOwnerFolder(this.questionImages, previousName, newName),
+		const adapter = this.app.vault.adapter;
+		if (!(await adapter.exists(dataFolder))) {
+			await adapter.mkdir(dataFolder);
+		}
+		this.questions = new JsonLibrary(
+			adapter,
+			{ collection: "questions", parse: parseQuestionRecord, toRecord: questionRecord },
+			`${dataFolder}/questions.json`,
 		);
-		this.exams = new DefinitionLibrary(
-			files,
-			{ kind: "exam", parse: parseExamFile, serialize: serializeExam },
-			`${dataFolder}/exams`,
-			(previousName, newName) => this.renameOwnerFolder(this.attachments, previousName, newName),
+		this.exams = new JsonLibrary(
+			adapter,
+			{ collection: "exams", parse: parseExamRecord, toRecord: examRecord },
+			`${dataFolder}/exams.json`,
 		);
-		this.results = new ResultsStore(this.app.vault.adapter, dataFolder);
-		this.attachments = new AttachmentStore(this.app.vault.adapter, `${dataFolder}/attachments`, (examId) =>
-			ownerFolderName(this.exams, examId),
-		);
-		this.questionImages = new AttachmentStore(this.app.vault.adapter, `${dataFolder}/question-images`, (questionId) =>
-			ownerFolderName(this.questions, questionId),
-		);
+		this.results = new ResultsStore(adapter, dataFolder);
+		this.attachments = new AttachmentStore(adapter, `${dataFolder}/attachments`);
+		this.questionImages = new AttachmentStore(adapter, `${dataFolder}/question-images`);
 		this.vaultFiles = new VaultFiles(this.app, () => this.settings.reuseFolder);
 		this.registerEvent(this.app.vault.on("rename", (file, oldPath) => void this.followRename(oldPath, file.path)));
 
@@ -253,33 +248,7 @@ export default class ExaminerPlugin extends Plugin {
 			}
 		});
 		if (!loaded) return;
-		await this.importVaultFiles();
 		await this.createExampleIfNeeded();
-	}
-
-	private async importVaultFiles(): Promise<void> {
-		if (this.settings.vaultFilesImported) return;
-		const moved = { question: 0, exam: 0 };
-		for (const file of this.app.vault.getMarkdownFiles()) {
-			const kind = fileKindOf(this.app.metadataCache.getFileCache(file)?.frontmatter);
-			if (!kind) continue;
-			try {
-				const library = kind === "question" ? this.questions : this.exams;
-				if (await library.import(await this.app.vault.read(file))) {
-					await this.app.fileManager.trashFile(file);
-					moved[kind]++;
-				}
-			} catch (error) {
-				console.error(`Examiner: could not move ${file.path} into the plugin folder`, error);
-			}
-		}
-		if (moved.question + moved.exam > 0) {
-			new Notice(
-				`Moved ${plural(moved.question, "question")} and ${plural(moved.exam, "exam")} from your notes into Examiner's plugin folder. The original notes are in the trash.`,
-			);
-		}
-		this.settings.vaultFilesImported = true;
-		await this.saveSettings();
 	}
 
 	private async createExampleIfNeeded(): Promise<void> {
@@ -334,14 +303,6 @@ export default class ExaminerPlugin extends Plugin {
 
 	async openExams(): Promise<void> {
 		await this.openView({ type: VIEW_TYPE_EXAMS });
-	}
-
-	private async renameOwnerFolder(store: AttachmentStore, previousName: string, newName: string): Promise<void> {
-		try {
-			await store.renameOwner(previousName, newName);
-		} catch (error) {
-			console.error(`Examiner: could not rename the folder ${previousName} to ${newName}`, error);
-		}
 	}
 
 	get attachmentAccess(): AttachmentAccess {
@@ -469,16 +430,4 @@ export default class ExaminerPlugin extends Plugin {
 		await leaf.setViewState({ ...viewState, active: true });
 		await workspace.revealLeaf(leaf);
 	}
-}
-
-function ownerFolderName(library: DefinitionLibrary<{ id: string; title: string }>, id: string): string {
-	const name = library.fileNameOf(id);
-	if (name === undefined) {
-		return id;
-	}
-	return name;
-}
-
-function plural(count: number, noun: string): string {
-	return `${count} ${noun}${count === 1 ? "" : "s"}`;
 }

@@ -1,13 +1,12 @@
 import { describe, expect, it } from "vitest";
 import type { ExamDefinition } from "../src/core/exam";
 import { blankFlashcard, type QuestionDefinition } from "../src/core/definition";
-import { parseExamFile, serializeExam } from "../src/storage/exam-format";
+import { examRecord, parseExamRecord } from "../src/storage/exam-format";
 import { createId } from "../src/storage/format-shared";
-import { splitFrontmatter } from "../src/storage/frontmatter";
-import { parseQuestionFile, serializeQuestion } from "../src/storage/question-format";
+import { parseQuestionRecord, questionRecord } from "../src/storage/question-format";
 import { ResultsStore, toAttemptSummary, type ExamResultRecord, type ExamSession, type PracticeAttemptRecord } from "../src/storage/results";
 import { FakeDataFiles } from "./fake-files";
-import { basicAddition } from "./helpers";
+import { basicAddition, roundTripExam, roundTripQuestion } from "./helpers";
 
 const multiStep: QuestionDefinition = {
 	id: "q-multi001",
@@ -29,7 +28,7 @@ const multiStep: QuestionDefinition = {
 	tags: ["maths", "geometry/triangles"],
 };
 
-describe("question file format", () => {
+describe("question records", () => {
 	it("round-trips every kind of variable, step and answer rule", () => {
 		for (const answer of [
 			{ check: "exact" },
@@ -38,31 +37,19 @@ describe("question file format", () => {
 			{ check: "relative", percent: 2 },
 		] as const) {
 			const definition = { ...multiStep, answer };
-			expect(parseQuestionFile(serializeQuestion(definition))).toEqual({ ok: true, definition });
+			expect(roundTripQuestion(definition)).toEqual({ ok: true, definition });
 		}
 	});
 
-	it("writes readable markdown with the question text as the body", () => {
-		const content = serializeQuestion(basicAddition());
-		expect(content).toMatch(/^---\n/);
-		expect(content).toContain("examiner: question\n");
-		expect(content).toContain("examiner-title: Basic addition\n");
-		expect(content).toContain("{answer} = {x} + {y}");
-		expect(splitFrontmatter(content).body).toBe("What is {x} + {y}?\n");
-	});
-
-	it("keeps properties the plugin does not manage", () => {
-		const original = "---\naliases: [sum]\nexaminer: question\nexaminer-id: q-1\nrating: 5\n---\nOld prompt\n";
-		const updated = serializeQuestion(basicAddition({ id: "q-1" }), original);
-		expect(updated).toContain("aliases:\n  - sum\n");
-		expect(updated).toContain("rating: 5\n");
-		expect(updated.indexOf("aliases")).toBeLessThan(updated.indexOf("examiner:"));
-		expect(splitFrontmatter(updated).body).toBe("What is {x} + {y}?\n");
+	it("writes readable properties with the question text as the prompt", () => {
+		const record = questionRecord(basicAddition());
+		expect(record).toMatchObject({ type: "calculation", title: "Basic addition", prompt: "What is {x} + {y}?" });
+		expect(record.steps).toEqual(["{answer} = {x} + {y}"]);
+		expect(record).not.toHaveProperty("id");
 	});
 
 	it("loads non-numeric values as NaN so validation can point at them", () => {
-		const content = "---\nexaminer: question\nexaminer-id: q\nexaminer-variables:\n  - { name: x, type: integer, min: a, max: 2 }\n---\n";
-		const result = parseQuestionFile(content);
+		const result = parseQuestionRecord("q", { variables: [{ name: "x", type: "integer", min: "a", max: 2 }] });
 		expect(result.ok && result.definition.variables[0]?.source).toEqual({ kind: "integer", min: Number.NaN, max: 2 });
 	});
 
@@ -71,32 +58,18 @@ describe("question file format", () => {
 			variables: [{ name: "x", source: { kind: "integer", min: Number.NaN, max: 3 } }],
 			answer: { check: "rounded", places: Number.NaN },
 		});
-		const content = serializeQuestion(definition);
-		expect(content).toContain("min: null");
-		expect(parseQuestionFile(content)).toEqual({ ok: true, definition });
-	});
-
-	it("does not treat Obsidian tags as examiner tags", () => {
-		const content = "---\nexaminer: question\nexaminer-id: q-1\ntags: [obsidian-tag]\n---\nPrompt with #hashtag\n";
-		const result = parseQuestionFile(content);
-		expect(result.ok && result.definition.tags).toEqual([]);
+		expect(JSON.stringify(questionRecord(definition))).toContain('"min":null');
+		expect(roundTripQuestion(definition)).toEqual({ ok: true, definition });
 	});
 
 	it("accepts hand-written variations", () => {
-		const content = [
-			"---",
-			"examiner: question",
-			"examiner-id: q-hand",
-			"examiner-title: Hand written",
-			"examiner-tags: maths, Physics // Circuits",
-			"examiner-variables:",
-			"  - { name: x, type: integer, min: '1', max: 5 }",
-			"examiner-steps:",
-			"  - answer = {x} * 2",
-			"---",
-			"Double {x}.",
-		].join("\n");
-		const result = parseQuestionFile(content);
+		const result = parseQuestionRecord("q-hand", {
+			title: "Hand written",
+			tags: "maths, Physics // Circuits",
+			variables: [{ name: "x", type: "integer", min: "1", max: 5 }],
+			steps: ["answer = {x} * 2"],
+			prompt: "Double {x}.",
+		});
 		expect(result).toEqual({
 			ok: true,
 			definition: {
@@ -140,7 +113,7 @@ describe("question file format", () => {
 		["a written flashcard", writtenCard],
 		["a multiple-choice flashcard", choiceCard],
 	])("round-trips %s", (_label, definition) => {
-		const result = parseQuestionFile(serializeQuestion(definition));
+		const result = roundTripQuestion(definition);
 		expect(result.ok).toBe(true);
 		if (!result.ok) return;
 		expect(result.definition.kind).toBe("flashcard");
@@ -149,65 +122,46 @@ describe("question file format", () => {
 		expect(result.definition.flashcard.mode).toBe(definition.flashcard.mode);
 		if (definition.flashcard.mode === "written") expect(result.definition.flashcard.answer).toBe(definition.flashcard.answer);
 		else expect(result.definition.flashcard).toMatchObject({ options: definition.flashcard.options, correct: definition.flashcard.correct });
-		expect(serializeQuestion(result.definition)).toBe(serializeQuestion(definition));
+		expect(questionRecord(result.definition)).toEqual(questionRecord(definition));
 	});
 
-	it("writes flashcards readably and marks them as a newer format", () => {
-		const { frontmatter } = splitFrontmatter(serializeQuestion(choiceCard));
-		expect(frontmatter).toContain("examiner-version: 2");
-		expect(frontmatter).toContain("examiner-type: flashcard");
-		expect(frontmatter).toContain("examiner-answer-mode: multiple-choice");
-		expect(frontmatter).toContain("examiner-correct-option: 2");
-		expect(frontmatter).not.toContain("examiner-steps");
-		expect(splitFrontmatter(serializeQuestion(multiStep)).frontmatter).toContain("examiner-version: 1");
+	it("only writes the properties of the question's own type", () => {
+		const card = questionRecord(choiceCard);
+		expect(card).toMatchObject({ type: "flashcard", answerMode: "multiple-choice", correctOption: 2 });
+		expect(card).not.toHaveProperty("steps");
+		expect(card).not.toHaveProperty("variables");
+		const calculation = questionRecord(multiStep);
+		expect(calculation).toMatchObject({ type: "calculation" });
+		expect(calculation).not.toHaveProperty("expectedAnswer");
 	});
 
-	it("drops the other type's properties when a question changes type", () => {
-		const asFlashcard = serializeQuestion(writtenCard, serializeQuestion(multiStep));
-		expect(asFlashcard).not.toContain("examiner-variables");
-		const backToCalculation = serializeQuestion({ ...multiStep, id: writtenCard.id }, asFlashcard);
-		expect(backToCalculation).not.toContain("examiner-expected-answer");
-		expect(backToCalculation).toContain("examiner-type: calculation");
-	});
-
-	it("defaults older questions without a type or marks to a 1-mark calculation question", () => {
-		const result = parseQuestionFile("---\nexaminer: question\nexaminer-version: 1\nexaminer-id: q-old\n---\nOld");
+	it("defaults a question without a type or marks to a 1-mark calculation question", () => {
+		const result = parseQuestionRecord("q-old", { prompt: "Old" });
 		expect(result.ok && result.definition).toMatchObject({ kind: "calculation", marks: 1 });
 	});
 
 	it.each([
-		["---\nexaminer: question\nexaminer-id: q\nexaminer-type: essay\n---\n", 'Unknown question type "essay"'],
-		["---\nexaminer: question\nexaminer-id: q\nexaminer-type: flashcard\nexaminer-answer-mode: oral\n---\n", 'Unknown answer mode "oral"'],
-		["---\nexaminer: question\nexaminer-id: q\nexaminer-type: flashcard\nexaminer-answer-mode: multiple-choice\nexaminer-options: nope\n---\n", "must be a list"],
-	])("reports invalid flashcard files: %#", (content, message) => {
-		const result = parseQuestionFile(content);
+		[{ type: "essay" }, 'Unknown question type "essay"'],
+		[{ type: "flashcard", answerMode: "oral" }, 'Unknown answer mode "oral"'],
+		[{ type: "flashcard", answerMode: "multiple-choice", options: "nope" }, "must be a list"],
+		["not an object", "set of properties"],
+		[{ variables: "nope" }, '"variables" must be a list'],
+		[{ variables: [{ name: "x", type: "random" }] }, 'unknown type "random"'],
+		[{ steps: [42] }, "must look like"],
+		[{ answer: { check: "fuzzy" } }, 'Unknown answer check "fuzzy"'],
+	])("reports invalid records: %#", (record, message) => {
+		const result = parseQuestionRecord("q", record);
 		expect(result.ok).toBe(false);
 		if (!result.ok) expect(result.errors.join(" ")).toContain(message);
 	});
 
 	it("loads a missing correct option so validation can point at it", () => {
-		const result = parseQuestionFile(
-			"---\nexaminer: question\nexaminer-id: q\nexaminer-type: flashcard\nexaminer-answer-mode: multiple-choice\nexaminer-options: [A, B]\n---\nPick",
-		);
+		const result = parseQuestionRecord("q", { type: "flashcard", answerMode: "multiple-choice", options: ["A", "B"], prompt: "Pick" });
 		expect(result.ok && result.definition.flashcard.correct).toBe(-1);
-	});
-
-	it.each([
-		["---\nexaminer: question\nexaminer-id: [unclosed\n---\n", "not valid YAML"],
-		["---\nexaminer: question\n---\nPrompt", 'Missing "examiner-id"'],
-		["---\nexaminer: question\nexaminer-id: q\nexaminer-variables: nope\n---\n", "must be a list"],
-		["---\nexaminer: question\nexaminer-id: q\nexaminer-variables:\n  - { name: x, type: random }\n---\n", 'unknown type "random"'],
-		["---\nexaminer: question\nexaminer-id: q\nexaminer-steps:\n  - 42\n---\n", "must look like"],
-		["---\nexaminer: question\nexaminer-id: q\nexaminer-answer: { check: fuzzy }\n---\n", 'Unknown answer check "fuzzy"'],
-		["---\nexaminer: question\nexaminer-version: 99\nexaminer-id: q\n---\n", "newer version of Examiner"],
-	])("reports invalid files: %#", (content, message) => {
-		const result = parseQuestionFile(content);
-		expect(result.ok).toBe(false);
-		if (!result.ok) expect(result.errors.join(" ")).toContain(message);
 	});
 });
 
-describe("exam file format", () => {
+describe("exam records", () => {
 	const exam: ExamDefinition = {
 		id: "e-1",
 		title: "Mock exam",
@@ -221,49 +175,41 @@ describe("exam file format", () => {
 	};
 
 	it("round-trips", () => {
-		expect(parseExamFile(serializeExam(exam))).toEqual({ ok: true, definition: exam });
+		expect(roundTripExam(exam)).toEqual({ ok: true, definition: exam });
 		const untimed = { ...exam, timeLimitMinutes: null };
-		expect(parseExamFile(serializeExam(untimed))).toEqual({ ok: true, definition: untimed });
+		expect(roundTripExam(untimed)).toEqual({ ok: true, definition: untimed });
 	});
 
 	it("writes the time limit as a readable duration", () => {
-		expect(serializeExam(exam)).toContain("examiner-time-limit: 1hr 30min\n");
-		expect(serializeExam({ ...exam, timeLimitMinutes: null })).toContain("examiner-time-limit: none\n");
+		expect(examRecord(exam).timeLimit).toBe("1hr 30min");
+		expect(examRecord({ ...exam, timeLimitMinutes: null }).timeLimit).toBe("none");
 	});
 
-	it("keeps the note body and other properties", () => {
-		const original = "---\nexaminer: exam\nexaminer-id: e-1\nsource: textbook\n---\nMy revision notes.\n";
-		const updated = serializeExam(exam, original);
-		expect(updated).toContain("source: textbook\n");
-		expect(splitFrontmatter(updated).body).toBe("My revision notes.\n");
-	});
-
-	it("stores the passing grade and defaults older exams without one to 50%", () => {
-		expect(serializeExam(exam)).toContain("examiner-passing-grade: 70\n");
-		const older = parseExamFile("---\nexaminer: exam\nexaminer-id: e\nexaminer-questions: [q-1]\n---\n");
-		expect(older.ok && older.definition.passingPercent).toBe(50);
-		const withPercentSign = parseExamFile("---\nexaminer: exam\nexaminer-id: e\nexaminer-passing-grade: 65%\n---\n");
+	it("stores the passing grade and defaults an exam without one to 50%", () => {
+		expect(examRecord(exam).passingGrade).toBe(70);
+		const without = parseExamRecord("e", { questions: ["q-1"] });
+		expect(without.ok && without.definition.passingPercent).toBe(50);
+		const withPercentSign = parseExamRecord("e", { passingGrade: "65%" });
 		expect(withPercentSign.ok && withPercentSign.definition.passingPercent).toBe(65);
 		for (const edge of [0, 100]) {
-			const parsed = parseExamFile(`---\nexaminer: exam\nexaminer-id: e\nexaminer-passing-grade: ${edge}\n---\n`);
+			const parsed = parseExamRecord("e", { passingGrade: edge });
 			expect(parsed.ok && parsed.definition.passingPercent).toBe(edge);
 		}
 	});
 
 	it.each(["101", "-1", "50.5", "half"])("rejects a passing grade of %s", (value) => {
-		const parsed = parseExamFile(`---\nexaminer: exam\nexaminer-id: e\nexaminer-passing-grade: ${value}\n---\n`);
+		const parsed = parseExamRecord("e", { passingGrade: value });
 		expect(parsed.ok).toBe(false);
 		if (!parsed.ok) expect(parsed.errors.join(" ")).toContain("whole number from 0 to 100");
 	});
 
 	it("accepts bare IDs and rejects bad counts and durations", () => {
-		const shorthand = "---\nexaminer: exam\nexaminer-id: e\nexaminer-questions: [q-1]\n---\n";
-		const result = parseExamFile(shorthand);
+		const result = parseExamRecord("e", { questions: ["q-1"] });
 		expect(result.ok && result.definition.questions).toEqual([{ questionId: "q-1", count: 1 }]);
 
-		const badCount = parseExamFile("---\nexaminer: exam\nexaminer-id: e\nexaminer-questions:\n  - { id: q-1, count: 0 }\n---\n");
+		const badCount = parseExamRecord("e", { questions: [{ id: "q-1", count: 0 }] });
 		expect(!badCount.ok && badCount.errors[0]).toContain("count of at least 1");
-		const badTime = parseExamFile("---\nexaminer: exam\nexaminer-id: e\nexaminer-time-limit: soon\n---\n");
+		const badTime = parseExamRecord("e", { timeLimit: "soon" });
 		expect(!badTime.ok && badTime.errors[0]).toContain("duration");
 	});
 });

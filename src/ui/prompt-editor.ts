@@ -4,7 +4,13 @@ import { Decoration, EditorView, keymap, placeholder, showTooltip, WidgetType, t
 import { finishRenderMath, renderMath } from "obsidian";
 import { findMathRanges, findTemplateReferences, type MathRange } from "../core/template";
 
-export function createPromptEditor(parent: HTMLElement, initial: string, onChange: (text: string) => void): EditorView {
+export interface PromptEditorOptions {
+	placeholderText: string;
+	label: string;
+	highlightVariables: boolean;
+}
+
+export function createPromptEditor(parent: HTMLElement, initial: string, options: PromptEditorOptions, onChange: (text: string) => void): EditorView {
 	return new EditorView({
 		parent,
 		state: EditorState.create({
@@ -13,9 +19,9 @@ export function createPromptEditor(parent: HTMLElement, initial: string, onChang
 				history(),
 				keymap.of([...defaultKeymap, ...historyKeymap]),
 				EditorView.lineWrapping,
-				placeholder("What is {x} + {y}?"),
-				EditorView.contentAttributes.of({ "aria-label": "Question", spellcheck: "true" }),
-				promptDecorations,
+				placeholder(options.placeholderText),
+				EditorView.contentAttributes.of({ "aria-label": options.label, spellcheck: "true" }),
+				createDecorationsField(options.highlightVariables),
 				mathTooltip,
 				EditorView.updateListener.of((update) => {
 					if (update.docChanged) onChange(update.state.doc.toString());
@@ -56,7 +62,7 @@ function selectionTouches(state: EditorState, from: number, to: number): boolean
 	return state.selection.ranges.some((range) => range.from <= to && range.to >= from);
 }
 
-function buildDecorations(state: EditorState): DecorationSet {
+function buildDecorations(state: EditorState, highlightVariables: boolean): DecorationSet {
 	const text = state.doc.toString();
 	const decorations: Range<Decoration>[] = [];
 	const math = findMathRanges(text);
@@ -65,18 +71,22 @@ function buildDecorations(state: EditorState): DecorationSet {
 			decorations.push(Decoration.replace({ widget: new MathWidget(range) }).range(range.from, range.to));
 		}
 	}
-	for (const reference of findTemplateReferences(text)) {
-		if (reference.inMath) continue;
-		decorations.push(Decoration.mark({ class: "examiner-variable-token" }).range(reference.start, reference.end));
+	if (highlightVariables) {
+		for (const reference of findTemplateReferences(text)) {
+			if (reference.inMath) continue;
+			decorations.push(Decoration.mark({ class: "examiner-variable-token" }).range(reference.start, reference.end));
+		}
 	}
 	return Decoration.set(decorations, true);
 }
 
-const promptDecorations = StateField.define<DecorationSet>({
-	create: buildDecorations,
-	update: (value, transaction) => (transaction.docChanged || transaction.selection ? buildDecorations(transaction.state) : value),
-	provide: (field) => EditorView.decorations.from(field),
-});
+function createDecorationsField(highlightVariables: boolean): StateField<DecorationSet> {
+	return StateField.define<DecorationSet>({
+		create: (state) => buildDecorations(state, highlightVariables),
+		update: (value, transaction) => (transaction.docChanged || transaction.selection ? buildDecorations(transaction.state, highlightVariables) : value),
+		provide: (field) => EditorView.decorations.from(field),
+	});
+}
 
 function editedMathTooltip(state: EditorState): Tooltip | null {
 	const head = state.selection.main.head;

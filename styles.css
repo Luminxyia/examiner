@@ -2126,6 +2126,14 @@ button.examiner-show-more {
 	overflow: auto;
 }
 
+.examiner-formula-editor {
+	margin-top: var(--size-4-2);
+}
+
+.examiner-reference-text {
+	width: 100%;
+}
+
 .examiner-reference-image,
 .examiner-reference-page {
 	display: block;

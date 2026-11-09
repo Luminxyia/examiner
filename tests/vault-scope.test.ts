@@ -128,15 +128,15 @@ describe("VaultFiles", () => {
 });
 
 describe("settings on a fresh install", () => {
-	it("skips the old-notes import when there is no saved data", () => {
-		expect(initialSettings(null)).toEqual({ exampleCreated: false, vaultFilesImported: true, reuseFolder: "", dataFolder: "examiner" });
+	it("uses the defaults when there is no saved data", () => {
+		expect(initialSettings(null)).toEqual({ exampleCreated: false, reuseFolder: "", dataFolder: "examiner" });
 	});
 
-	it("still runs the one-time import when upgrading from saved data", () => {
-		expect(initialSettings({ exampleCreated: true })).toMatchObject({ vaultFilesImported: false, reuseFolder: "" });
-		expect(initialSettings({ exampleCreated: true, vaultFilesImported: true, reuseFolder: "Attachments" })).toMatchObject({
-			vaultFilesImported: true,
+	it("keeps saved values over the defaults", () => {
+		expect(initialSettings({ exampleCreated: true, reuseFolder: "Attachments" })).toMatchObject({
+			exampleCreated: true,
 			reuseFolder: "Attachments",
+			dataFolder: "examiner",
 		});
 	});
 });

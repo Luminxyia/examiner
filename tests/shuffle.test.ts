@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import type { QuestionDefinition } from "../src/core/definition";
 import { markExam, prepareExam, summariseExam, type CalculationItem, type ExamDefinition } from "../src/core/exam";
 import { shuffled } from "../src/core/random";
-import { parseExamFile, serializeExam } from "../src/storage/exam-format";
-import { basicAddition, seededRandom } from "./helpers";
+import { examRecord } from "../src/storage/exam-format";
+import { basicAddition, roundTripExam, seededRandom } from "./helpers";
 
 const library = new Map<string, QuestionDefinition>(
 	["a", "b", "c", "d", "e"].map((id) => [`q-${id}`, basicAddition({ id: `q-${id}`, title: `Question ${id.toUpperCase()}` })]),
@@ -67,18 +67,16 @@ describe("randomised question order", () => {
 	});
 });
 
-describe("randomised order in exam files", () => {
+describe("randomised order in exam records", () => {
 	it("saves the option and restores it when the exam is reopened", () => {
-		const content = serializeExam({ ...exam, shuffle: true });
-		expect(content).toContain("examiner-randomize-order: true");
-		const result = parseExamFile(content);
+		expect(examRecord({ ...exam, shuffle: true }).shuffle).toBe(true);
+		const result = roundTripExam({ ...exam, shuffle: true });
 		expect(result.ok && result.definition.shuffle).toBe(true);
 	});
 
 	it("leaves exams without the option as they were", () => {
-		const content = serializeExam(exam);
-		expect(content).not.toContain("examiner-randomize-order");
-		const result = parseExamFile(content);
+		expect(examRecord(exam)).not.toHaveProperty("shuffle");
+		const result = roundTripExam(exam);
 		expect(result.ok && "shuffle" in result.definition).toBe(false);
 	});
 });

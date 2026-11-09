@@ -1,3 +1,4 @@
+import type { EditorView } from "@codemirror/view";
 import { DropdownComponent, ItemView, Notice, setIcon, Setting, type ViewStateResult, type WorkspaceLeaf } from "obsidian";
 import { hasErrors, QUESTION_KIND_NAMES, type ValidationIssue } from "../core/definition";
 import {
@@ -13,6 +14,7 @@ import type ExaminerPlugin from "../main";
 import { createId } from "../storage/format-shared";
 import { confirm, iconAction, renderLoadState, renderTags, textButton } from "./shared";
 import { addAttachments, renderAttachmentPicker } from "./attachment-picker";
+import { createPromptEditor } from "./prompt-editor";
 import { startExam } from "./start-exam";
 
 export const VIEW_TYPE_EXAM_EDITOR = "examiner-exam-editor";
@@ -42,6 +44,7 @@ export class ExamEditorView extends ItemView {
 	private passingIssuesEl: HTMLElement | null = null;
 	private questionIssuesEl: HTMLElement | null = null;
 	private attachmentsEl: HTMLElement | null = null;
+	private formulaEditor: EditorView | null = null;
 	private toolbarEl: HTMLElement | null = null;
 	private discardButton: HTMLButtonElement | null = null;
 	private saveButton: HTMLButtonElement | null = null;
@@ -97,6 +100,8 @@ export class ExamEditorView extends ItemView {
 	}
 
 	override async onClose(): Promise<void> {
+		this.formulaEditor?.destroy();
+		this.formulaEditor = null;
 		if (this.isDirty()) await this.discardUploads();
 	}
 
@@ -165,6 +170,8 @@ export class ExamEditorView extends ItemView {
 	}
 
 	private render(): void {
+		this.formulaEditor?.destroy();
+		this.formulaEditor = null;
 		const root = this.contentEl;
 		root.empty();
 		this.toolbarEl = null;
@@ -236,6 +243,7 @@ export class ExamEditorView extends ItemView {
 		details.createDiv({ cls: "examiner-section-title", text: "Reference materials" });
 		this.attachmentsEl = details.createDiv({ cls: "examiner-attachments" });
 		this.renderAttachments();
+		this.renderFormulaEditor(details);
 
 		details.createDiv({ cls: "examiner-section-title", text: "Questions" });
 		this.questionIssuesEl = details.createDiv({ cls: "examiner-field-issues" });
@@ -260,6 +268,19 @@ export class ExamEditorView extends ItemView {
 		this.availableEl = source.createDiv({ cls: "examiner-exam-available" });
 
 		this.renderQuestions();
+	}
+
+	private renderFormulaEditor(parent: HTMLElement): void {
+		const container = parent.createDiv({ cls: "examiner-prompt-editor examiner-formula-editor" });
+		const options = { placeholderText: "Reference material", label: "Formula sheet", highlightVariables: false };
+		this.formulaEditor = createPromptEditor(container, this.exam.formulaSheet ?? "", options, (text) => {
+			if (text.trim() === "") {
+				delete this.exam.formulaSheet;
+			} else {
+				this.exam.formulaSheet = text;
+			}
+			this.updateActions();
+		});
 	}
 
 	private renderToolbar(): void {
@@ -478,7 +499,7 @@ export class ExamEditorView extends ItemView {
 		}
 		this.saving = true;
 		try {
-			if (this.plugin.exams.pathOf(exam.id) !== undefined) await this.plugin.exams.save(exam);
+			if (this.plugin.exams.has(exam.id)) await this.plugin.exams.save(exam);
 			else await this.plugin.exams.create(exam);
 		} catch (error) {
 			new Notice(`Could not save the exam: ${error instanceof Error ? error.message : String(error)}`);

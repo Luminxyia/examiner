@@ -1,7 +1,10 @@
 import { blankFlashcard, type QuestionDefinition } from "../src/core/definition";
-import type { ExamItemResult, ItemOutcome } from "../src/core/exam";
+import type { ExamDefinition, ExamItemResult, ItemOutcome } from "../src/core/exam";
 import type { RandomSource } from "../src/core/generate";
 import type { InsightAttempt } from "../src/core/insights";
+import { examRecord, parseExamRecord } from "../src/storage/exam-format";
+import type { ParseResult } from "../src/storage/format-shared";
+import { parseQuestionRecord, questionRecord } from "../src/storage/question-format";
 
 export { seededRandom } from "../src/core/random";
 
@@ -27,6 +30,14 @@ export function basicAddition(overrides: Partial<QuestionDefinition> = {}): Ques
 		tags: ["mathematics"],
 		...overrides,
 	};
+}
+
+export function roundTripQuestion(question: QuestionDefinition): ParseResult<QuestionDefinition> {
+	return parseQuestionRecord(question.id, JSON.parse(JSON.stringify(questionRecord(question))));
+}
+
+export function roundTripExam(exam: ExamDefinition): ParseResult<ExamDefinition> {
+	return parseExamRecord(exam.id, JSON.parse(JSON.stringify(examRecord(exam))));
 }
 
 export const NOW = new Date(Date.UTC(2026, 9, 25, 12));

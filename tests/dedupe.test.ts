@@ -8,12 +8,10 @@ import {
 	sameBytes,
 	vaultReference,
 } from "../src/storage/attachments";
-import { parseExamFile, serializeExam } from "../src/storage/exam-format";
-import { parseQuestionFile, serializeQuestion } from "../src/storage/question-format";
 import type { VaultFiles } from "../src/storage/vault-files";
 import { addAttachments, type AttachmentAccess } from "../src/ui/attachment-picker";
 import { FakeBinaryFiles } from "./fake-files";
-import { basicAddition } from "./helpers";
+import { basicAddition, roundTripExam, roundTripQuestion } from "./helpers";
 import { notices } from "./obsidian-stub";
 
 const encode = (text: string) => new TextEncoder().encode(text).buffer;
@@ -70,11 +68,9 @@ describe("vault references", () => {
 	});
 
 	it("keeps vault references when questions and exams are saved and reopened", () => {
-		const question = parseQuestionFile(serializeQuestion(basicAddition({ images: ["vault:Images/circuit.png", "local.png"] })));
+		const question = roundTripQuestion(basicAddition({ images: ["vault:Images/circuit.png", "local.png"] }));
 		expect(question.ok && question.definition.images).toEqual(["vault:Images/circuit.png", "local.png"]);
-		const exam = parseExamFile(
-			serializeExam({ id: "e", title: "E", tags: [], timeLimitMinutes: null, passingPercent: 40, questions: [], attachments: ["vault:Sheets/formulae.pdf"] }),
-		);
+		const exam = roundTripExam({ id: "e", title: "E", tags: [], timeLimitMinutes: null, passingPercent: 40, questions: [], attachments: ["vault:Sheets/formulae.pdf"] });
 		expect(exam.ok && exam.definition.attachments).toEqual(["vault:Sheets/formulae.pdf"]);
 	});
 });

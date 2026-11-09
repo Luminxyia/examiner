@@ -1,8 +1,8 @@
-import { loadPdfJs, Modal } from "obsidian";
+import { Component, loadPdfJs, Modal } from "obsidian";
 import type ExaminerPlugin from "../main";
 import { attachmentKind, attachmentLabel, attachmentMimeType } from "../storage/attachments";
 import { readAttachment } from "./attachment-picker";
-import { textButton } from "./shared";
+import { renderMarkdown, textButton } from "./shared";
 
 interface PdfViewport {
 	width: number;
@@ -28,14 +28,27 @@ export class ReferenceViewerModal extends Modal {
 	private renderToken = 0;
 	private objectUrl: string | null = null;
 	private pdf: PdfDocument | null = null;
+	private markdownComponent: Component | null = null;
 
 	constructor(
 		private readonly plugin: ExaminerPlugin,
 		private readonly examId: string,
 		private readonly names: readonly string[],
+		private readonly formulaSheet: string,
 		private index = 0,
 	) {
 		super(plugin.app);
+	}
+
+	private get sheetPages(): number {
+		if (this.formulaSheet === "") {
+			return 0;
+		}
+		return 1;
+	}
+
+	private get pageCount(): number {
+		return this.sheetPages + this.names.length;
 	}
 
 	override onOpen(): void {
@@ -63,11 +76,13 @@ export class ReferenceViewerModal extends Modal {
 		const pdf = this.pdf;
 		this.pdf = null;
 		if (pdf) void pdf.destroy().catch(() => undefined);
+		this.markdownComponent?.unload();
+		this.markdownComponent = null;
 	}
 
 	private move(offset: number): void {
 		const next = this.index + offset;
-		if (next < 0 || next >= this.names.length) return;
+		if (next < 0 || next >= this.pageCount) return;
 		this.index = next;
 		void this.render();
 	}
@@ -75,23 +90,36 @@ export class ReferenceViewerModal extends Modal {
 	private async render(): Promise<void> {
 		const token = ++this.renderToken;
 		this.release();
-		const name = this.names[this.index] ?? "";
-		this.setTitle(attachmentLabel(name));
+		const showsSheet = this.index < this.sheetPages;
+		const name = this.names[this.index - this.sheetPages] ?? "";
+		if (showsSheet) {
+			this.setTitle("Formula sheet");
+		} else {
+			this.setTitle(attachmentLabel(name));
+		}
 		const { contentEl } = this;
 		contentEl.empty();
 
-		if (this.names.length > 1) {
+		if (this.pageCount > 1) {
 			const nav = contentEl.createDiv({ cls: "examiner-reference-nav" });
 			const previous = textButton(nav, "Previous");
 			previous.disabled = this.index === 0;
 			previous.addEventListener("click", () => this.move(-1));
-			nav.createSpan({ cls: "examiner-muted examiner-small", text: `${this.index + 1} of ${this.names.length}` });
+			nav.createSpan({ cls: "examiner-muted examiner-small", text: `${this.index + 1} of ${this.pageCount}` });
 			const next = textButton(nav, "Next");
-			next.disabled = this.index === this.names.length - 1;
+			next.disabled = this.index === this.pageCount - 1;
 			next.addEventListener("click", () => this.move(1));
 		}
 
 		const viewer = contentEl.createDiv({ cls: "examiner-reference-viewer" });
+		if (showsSheet) {
+			const component = new Component();
+			component.load();
+			this.markdownComponent = component;
+			const sheet = viewer.createDiv({ cls: "examiner-reference-text" });
+			await renderMarkdown(this.app, sheet, this.formulaSheet, component);
+			return;
+		}
 		const status = viewer.createDiv({ cls: "examiner-muted examiner-small", text: "Loading…" });
 		const fail = (error: unknown) => {
 			if (token !== this.renderToken) return;

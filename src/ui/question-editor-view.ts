@@ -35,7 +35,7 @@ import { normaliseTags } from "../core/tags";
 import type ExaminerPlugin from "../main";
 import { createId } from "../storage/format-shared";
 import { withoutDefaultTags } from "../example";
-import { serializeQuestion } from "../storage/question-format";
+import { questionRecord } from "../storage/question-format";
 import { isVaultReference } from "../storage/attachments";
 import { addAttachments, renderAttachmentPicker, renderQuestionImages } from "./attachment-picker";
 import { createPromptEditor } from "./prompt-editor";
@@ -76,6 +76,10 @@ const ANSWER_CHECK_LABELS: Record<AnswerRule["check"], string> = {
 	absolute: "Within a tolerance",
 	relative: "Within a percentage",
 };
+
+function questionText(question: QuestionDefinition): string {
+	return JSON.stringify(questionRecord(question));
+}
 
 function blankQuestion(): QuestionDefinition {
 	return {
@@ -232,8 +236,8 @@ export class QuestionEditorView extends ItemView {
 	}
 
 	private isDirty(): boolean {
-		if (this.saved === null) return serializeQuestion(this.draft) !== serializeQuestion({ ...blankQuestion(), id: this.draft.id });
-		return serializeQuestion(this.draft) !== serializeQuestion(this.saved);
+		if (this.saved === null) return questionText(this.draft) !== questionText({ ...blankQuestion(), id: this.draft.id });
+		return questionText(this.draft) !== questionText(this.saved);
 	}
 
 	private loadQuestion(question: QuestionDefinition | null): void {
@@ -277,7 +281,7 @@ export class QuestionEditorView extends ItemView {
 			this.render();
 			return;
 		}
-		if (stored && this.saved && !this.isDirty() && serializeQuestion(stored) !== serializeQuestion(this.saved)) {
+		if (stored && this.saved && !this.isDirty() && questionText(stored) !== questionText(this.saved)) {
 			this.loadQuestion(stored);
 			this.render();
 			return;
@@ -318,8 +322,7 @@ export class QuestionEditorView extends ItemView {
 		for (const question of questions) {
 			let label = question.title || "Untitled question";
 			if ((titleCounts.get(question.title) ?? 0) > 1) {
-				const path = this.plugin.questions.pathOf(question.id) ?? "";
-				label += ` (${path.split("/").pop()?.replace(/\.md$/, "") ?? question.id})`;
+				label += ` (${question.id})`;
 			}
 			dropdown.addOption(question.id, label);
 		}
@@ -349,16 +352,12 @@ export class QuestionEditorView extends ItemView {
 		if (problems.length === 0) return;
 		const details = this.problemsEl.createEl("details", { cls: "examiner-problems" });
 		details.createEl("summary", {
-			text: problems.length === 1 ? "1 question file needs attention" : `${problems.length} question files need attention`,
+			text: problems.length === 1 ? "1 question needs attention" : `${problems.length} questions need attention`,
 		});
 		for (const problem of problems) {
 			const row = details.createDiv({ cls: "examiner-problem" });
-			row.createEl("code", { text: problem.path });
+			row.createEl("code", { text: problem.id });
 			for (const error of problem.errors) row.createDiv({ cls: "examiner-error-text", text: error });
-			if (problem.duplicateOf !== undefined) {
-				const button = row.createEl("button", { text: "Give it a new ID" });
-				button.addEventListener("click", () => void this.plugin.questions.assignNewId(problem.path, createId("q")));
-			}
 		}
 	}
 
@@ -582,7 +581,8 @@ export class QuestionEditorView extends ItemView {
 	private renderPromptSection(): void {
 		const body = this.section("prompt", "Question");
 		const container = body.createDiv({ cls: "examiner-prompt-editor" });
-		this.promptEditor = createPromptEditor(container, this.draft.prompt, (text) => {
+		const options = { placeholderText: "What is {x} + {y}?", label: "Question", highlightVariables: true };
+		this.promptEditor = createPromptEditor(container, this.draft.prompt, options, (text) => {
 			this.draft.prompt = text;
 			this.changed();
 		});
@@ -1063,7 +1063,7 @@ export class QuestionEditorView extends ItemView {
 		const title = this.saved.title || "Untitled question";
 		const confirmed = await confirm(this.app, {
 			title: `Delete "${title}"?`,
-			message: "Its file will be moved to the trash. Exams that use it will skip it.",
+			message: "Exams that use it will skip it.",
 			confirmText: "Delete",
 			destructive: true,
 		});

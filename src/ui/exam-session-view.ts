@@ -189,9 +189,10 @@ export class ExamSessionView extends ItemView {
 		position.createDiv({ cls: "examiner-exam-position", text: `Question ${index + 1} of ${session.items.length}` });
 		const side = header.createDiv({ cls: "examiner-exam-header-side" });
 		const attachments = session.attachments ?? [];
-		if (attachments.length > 0) {
+		const formulaSheet = session.formulaSheet ?? "";
+		if (attachments.length > 0 || formulaSheet !== "") {
 			textButton(side, "Show formula sheet").addEventListener("click", () => {
-				new ReferenceViewerModal(this.plugin, session.examId, attachments).open();
+				new ReferenceViewerModal(this.plugin, session.examId, attachments, formulaSheet).open();
 			});
 		}
 		const timer = side.createDiv({ cls: "examiner-timer" });
@@ -278,11 +279,13 @@ export class ExamSessionView extends ItemView {
 			next.addEventListener("click", () => void this.goTo(index + 1));
 		}
 
-		const workings = (session.workings ??= session.items.map(() => ""));
-		renderWorkingsInput(card, workings[index] ?? "", (value) => {
-			workings[index] = value;
-			this.persist();
-		});
+		if (item.kind !== "flashcard") {
+			const workings = (session.workings ??= session.items.map(() => ""));
+			renderWorkingsInput(card, workings[index] ?? "", (value) => {
+				workings[index] = value;
+				this.persist();
+			});
+		}
 
 		this.navEl = root.createDiv({ cls: "examiner-session-nav", attr: { role: "navigation", "aria-label": "Questions" } });
 		this.renderNav(session);

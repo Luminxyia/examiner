@@ -1,37 +1,13 @@
 import { parseNumberInput } from "../core/numbers";
 import { isValidAttachmentReference } from "./attachments";
 
-export const KEYS = {
-	kind: "examiner",
-	version: "examiner-version",
-	id: "examiner-id",
-	title: "examiner-title",
-	tags: "examiner-tags",
-	variables: "examiner-variables",
-	steps: "examiner-steps",
-	answer: "examiner-answer",
-	type: "examiner-type",
-	marks: "examiner-marks",
-	answerMode: "examiner-answer-mode",
-	expectedAnswer: "examiner-expected-answer",
-	options: "examiner-options",
-	correctOption: "examiner-correct-option",
-	scientific: "examiner-scientific-notation",
-	attachments: "examiner-attachments",
-	shuffle: "examiner-randomize-order",
-	images: "examiner-images",
-	timeLimit: "examiner-time-limit",
-	passingGrade: "examiner-passing-grade",
-	questions: "examiner-questions",
-} as const;
-
-export type FileKind = "question" | "exam";
-
 export type ParseResult<T> = { ok: true; definition: T } | { ok: false; errors: string[] };
 
-export function fileKindOf(frontmatter: Record<string, unknown> | undefined): FileKind | null {
-	const kind = frontmatter?.[KEYS.kind];
-	return kind === "question" || kind === "exam" ? kind : null;
+export function asRecord(value: unknown): Record<string, unknown> | null {
+	if (typeof value !== "object" || value === null || Array.isArray(value)) {
+		return null;
+	}
+	return value as Record<string, unknown>;
 }
 
 export function readString(value: unknown): string | undefined {

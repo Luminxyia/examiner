@@ -151,27 +151,16 @@ export interface BinaryFiles {
 	list(path: string): Promise<{ files: string[]; folders: string[] }>;
 	remove(path: string): Promise<void>;
 	rmdir(path: string, recursive: boolean): Promise<void>;
-	rename(from: string, to: string): Promise<void>;
 }
 
 export class AttachmentStore {
 	constructor(
 		private readonly files: BinaryFiles,
 		readonly folder: string,
-		private readonly folderNameOf: (ownerId: string) => string = (ownerId) => ownerId,
 	) {}
 
 	private ownerFolder(ownerId: string): string {
-		return `${this.folder}/${this.folderNameOf(ownerId)}`;
-	}
-
-	async renameOwner(previousName: string, newName: string): Promise<void> {
-		if (previousName === newName) return;
-		const from = `${this.folder}/${previousName}`;
-		const to = `${this.folder}/${newName}`;
-		if (!(await this.files.exists(from))) return;
-		if (await this.files.exists(to)) throw new AttachmentError(`${to} already exists.`);
-		await this.files.rename(from, to);
+		return `${this.folder}/${ownerId}`;
 	}
 
 	path(ownerId: string, name: string): string {

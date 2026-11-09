@@ -7,81 +7,79 @@ import {
 	type ExamQuestionRef,
 } from "../core/exam";
 import { normaliseTags } from "../core/tags";
-import { composeFile, readFrontmatter, type Frontmatter } from "./frontmatter";
-import { KEYS, readFileNames, readNumber, readString, readStringList, type ParseResult } from "./format-shared";
+import { asRecord, readFileNames, readNumber, readString, readStringList, type ParseResult } from "./format-shared";
 
-export const EXAM_FORMAT_VERSION = 1;
-
-export function parseExamFile(content: string): ParseResult<ExamDefinition> {
-	const read = readFrontmatter(content);
-	if (!read.ok) return { ok: false, errors: [read.error] };
-	const data = read.data;
+export function parseExamRecord(id: string, value: unknown): ParseResult<ExamDefinition> {
+	const fields = asRecord(value);
+	if (fields === null) {
+		return { ok: false, errors: ["The exam must be a set of properties."] };
+	}
 	const errors: string[] = [];
 
-	const version = data[KEYS.version];
-	if (version !== undefined && (typeof version !== "number" || version > EXAM_FORMAT_VERSION)) {
-		return { ok: false, errors: [`This file uses format version ${JSON.stringify(version)}, which needs a newer version of Examiner.`] };
-	}
-
-	const id = readString(data[KEYS.id]);
-	if (!id) errors.push(`Missing "${KEYS.id}".`);
-
-	const timeLimitMinutes = parseTimeLimit(data[KEYS.timeLimit]);
+	const timeLimitMinutes = parseTimeLimit(fields.timeLimit);
 	if (timeLimitMinutes === undefined) {
-		errors.push(`"${KEYS.timeLimit}" must be a duration such as 30min or 1hr, or none.`);
+		errors.push(`"timeLimit" must be a duration such as 30min or 1hr, or none.`);
 	}
 
-	const rawPassing = data[KEYS.passingGrade];
+	const rawPassing = fields.passingGrade;
 	const passingPercent =
 		rawPassing === undefined || rawPassing === null
 			? LEGACY_PASSING_PERCENT
 			: readNumber(typeof rawPassing === "string" ? rawPassing.replace(/%\s*$/, "") : rawPassing);
 	if (passingPercent === undefined || !isValidPassingPercent(passingPercent)) {
-		errors.push(`"${KEYS.passingGrade}" must be a whole number from 0 to 100.`);
+		errors.push(`"passingGrade" must be a whole number from 0 to 100.`);
 	}
 
-	const questions = readQuestionRefs(data[KEYS.questions], errors);
-	const tags = readStringList(data[KEYS.tags], KEYS.tags, errors);
-	const attachments = readFileNames(data[KEYS.attachments], KEYS.attachments, errors);
+	const questions = readQuestionRefs(fields.questions, errors);
+	const tags = readStringList(fields.tags, "tags", errors);
+	const attachments = readFileNames(fields.attachments, "attachments", errors);
 
-	if (errors.length > 0 || !id) return { ok: false, errors };
+	let formulaSheet = "";
+	if (typeof fields.formulaSheet === "string" && fields.formulaSheet.trim() !== "") {
+		formulaSheet = fields.formulaSheet;
+	}
+
+	if (errors.length > 0) return { ok: false, errors };
 	return {
 		ok: true,
 		definition: {
 			id,
-			title: readString(data[KEYS.title]) ?? "",
+			title: readString(fields.title) ?? "",
 			tags: normaliseTags(tags),
 			timeLimitMinutes: timeLimitMinutes ?? null,
 			passingPercent: passingPercent ?? LEGACY_PASSING_PERCENT,
 			questions,
 			...(attachments.length > 0 ? { attachments } : {}),
-			...(data[KEYS.shuffle] === true ? { shuffle: true } : {}),
+			...(formulaSheet !== "" ? { formulaSheet } : {}),
+			...(fields.shuffle === true ? { shuffle: true } : {}),
 		},
 	};
 }
 
-export function serializeExam(exam: ExamDefinition, previousContent?: string): string {
-	const previous = previousContent === undefined ? undefined : readFrontmatter(previousContent);
-	const managed: Frontmatter = {
-		[KEYS.kind]: "exam",
-		[KEYS.version]: EXAM_FORMAT_VERSION,
-		[KEYS.id]: exam.id,
-		[KEYS.title]: exam.title,
-		[KEYS.tags]: exam.tags,
-		[KEYS.timeLimit]: exam.timeLimitMinutes === null ? "none" : formatTimeLimit(exam.timeLimitMinutes),
-		[KEYS.passingGrade]: exam.passingPercent,
-		[KEYS.questions]: exam.questions.map((ref) => ({ id: ref.questionId, count: ref.count })),
-		[KEYS.attachments]: exam.attachments && exam.attachments.length > 0 ? exam.attachments : undefined,
-		[KEYS.shuffle]: exam.shuffle ? true : undefined,
+export function examRecord(exam: ExamDefinition): Record<string, unknown> {
+	const record: Record<string, unknown> = {
+		title: exam.title,
+		tags: exam.tags,
+		timeLimit: exam.timeLimitMinutes === null ? "none" : formatTimeLimit(exam.timeLimitMinutes),
+		passingGrade: exam.passingPercent,
+		questions: exam.questions.map((ref) => ({ id: ref.questionId, count: ref.count })),
 	};
-	const body = previous?.ok ? previous.body : "";
-	return composeFile(managed, body, previous?.ok ? previous.data : {});
+	if (exam.attachments && exam.attachments.length > 0) {
+		record.attachments = exam.attachments;
+	}
+	if (exam.formulaSheet && exam.formulaSheet.trim() !== "") {
+		record.formulaSheet = exam.formulaSheet;
+	}
+	if (exam.shuffle) {
+		record.shuffle = true;
+	}
+	return record;
 }
 
 function readQuestionRefs(raw: unknown, errors: string[]): ExamQuestionRef[] {
 	if (raw === undefined || raw === null) return [];
 	if (!Array.isArray(raw)) {
-		errors.push(`"${KEYS.questions}" must be a list.`);
+		errors.push(`"questions" must be a list.`);
 		return [];
 	}
 	const refs: ExamQuestionRef[] = [];

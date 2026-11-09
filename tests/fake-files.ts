@@ -1,58 +1,16 @@
-import type { FolderFiles } from "../src/storage/library";
 import type { BinaryFiles } from "../src/storage/attachments";
 import type { DataFiles } from "../src/storage/results";
 
-export class FakeFolderFiles implements FolderFiles {
-	readonly files = new Map<string, string>();
-	readonly folders = new Set<string>();
-	readonly trashed: string[] = [];
-
-	content(path: string): string {
-		const content = this.files.get(path);
-		if (content === undefined) throw new Error(`No file at ${path}`);
-		return content;
-	}
-
-	list(folder: string): Promise<string[]> {
-		const prefix = `${folder}/`;
-		const paths = [...this.files.keys()].filter(
-			(path) => path.startsWith(prefix) && !path.slice(prefix.length).includes("/") && path.endsWith(".md"),
-		);
-		return Promise.resolve(paths.sort());
-	}
-
-	read(path: string): Promise<string> {
-		return Promise.resolve(this.content(path));
-	}
-
-	write(path: string, content: string): Promise<void> {
-		this.files.set(path, content);
-		return Promise.resolve();
-	}
-
-	exists(path: string): Promise<boolean> {
-		return Promise.resolve(this.files.has(path) || this.folders.has(path));
-	}
-
-	rename(from: string, to: string): Promise<void> {
-		this.files.set(to, this.content(from));
-		this.files.delete(from);
-		return Promise.resolve();
-	}
-
-	trash(path: string): Promise<void> {
-		this.files.delete(path);
-		this.trashed.push(path);
-		return Promise.resolve();
-	}
-
-	ensureFolder(folder: string): Promise<void> {
-		this.folders.add(folder);
-		return Promise.resolve();
-	}
-}
-
 export class FakeDataFiles implements DataFiles {
+	rename(from: string, to: string): Promise<void> {
+		const content = this.files.get(from);
+		if (content === undefined) return Promise.reject(new Error(`No file at ${from}`));
+		if (this.files.has(to)) return Promise.reject(new Error(`Destination exists: ${to}`));
+		this.files.delete(from);
+		this.files.set(to, content);
+		return Promise.resolve();
+	}
+
 	readonly files = new Map<string, string>();
 
 	exists(path: string): Promise<boolean> {
@@ -121,22 +79,6 @@ export class FakeBinaryFiles implements BinaryFiles {
 			this.folders.delete(entry);
 		}
 		this.folders.delete(path);
-		return Promise.resolve();
-	}
-
-	rename(from: string, to: string): Promise<void> {
-		for (const path of [...this.files.keys()]) {
-			if (!path.startsWith(`${from}/`)) continue;
-			const data = this.files.get(path);
-			if (data === undefined) continue;
-			this.files.delete(path);
-			this.files.set(`${to}${path.slice(from.length)}`, data);
-		}
-		for (const folder of [...this.folders]) {
-			if (folder !== from && !folder.startsWith(`${from}/`)) continue;
-			this.folders.delete(folder);
-			this.folders.add(`${to}${folder.slice(from.length)}`);
-		}
 		return Promise.resolve();
 	}
 }

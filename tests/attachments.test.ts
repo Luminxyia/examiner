@@ -8,8 +8,9 @@ import {
 	isSafeAttachmentName,
 	sanitiseFileName,
 } from "../src/storage/attachments";
-import { parseExamFile, serializeExam } from "../src/storage/exam-format";
+import { examRecord, parseExamRecord } from "../src/storage/exam-format";
 import { FakeBinaryFiles } from "./fake-files";
+import { roundTripExam } from "./helpers";
 
 const bytes = (size = 4) => new Uint8Array(size).fill(7).buffer;
 const FOLDER = "plugin/attachments";
@@ -29,35 +30,6 @@ describe("attachment names", () => {
 		expect(isSafeAttachmentName("../sheet.pdf")).toBe(false);
 		expect(isSafeAttachmentName("sheet.pdf")).toBe(true);
 		expect(isSafeAttachmentName("sheet.exe")).toBe(false);
-	});
-});
-
-describe("AttachmentStore folder names", () => {
-	it("stores each owner's files in the folder named for it", async () => {
-		const files = new FakeBinaryFiles();
-		const store = new AttachmentStore(files, FOLDER, (ownerId) => (ownerId === "e-1" ? "Midterm" : ownerId));
-		const name = await store.add("e-1", "sheet.pdf", bytes(), []);
-		expect(files.files.has(`${FOLDER}/Midterm/${name}`)).toBe(true);
-		expect(store.path("e-1", name)).toBe(`${FOLDER}/Midterm/${name}`);
-	});
-
-	it("moves an owner's folder when its name changes", async () => {
-		const files = new FakeBinaryFiles();
-		const store = new AttachmentStore(files, FOLDER);
-		await store.add("e-1", "sheet.pdf", bytes(), []);
-		await store.renameOwner("e-1", "Midterm");
-		expect([...files.files.keys()]).toEqual([`${FOLDER}/Midterm/sheet.pdf`]);
-		await store.renameOwner("Missing", "Anything");
-		expect([...files.files.keys()]).toEqual([`${FOLDER}/Midterm/sheet.pdf`]);
-	});
-
-	it("refuses to move a folder onto one that already exists", async () => {
-		const files = new FakeBinaryFiles();
-		const store = new AttachmentStore(files, FOLDER);
-		await store.add("a", "one.pdf", bytes(), []);
-		await store.add("b", "two.pdf", bytes(), []);
-		await expect(store.renameOwner("a", "b")).rejects.toThrow(AttachmentError);
-		expect(files.files.has(`${FOLDER}/a/one.pdf`)).toBe(true);
 	});
 });
 
@@ -111,7 +83,7 @@ describe("AttachmentStore", () => {
 	});
 });
 
-describe("exam file attachments", () => {
+describe("exam record attachments", () => {
 	const exam: ExamDefinition = {
 		id: "e-ref",
 		title: "With sheet",
@@ -123,22 +95,19 @@ describe("exam file attachments", () => {
 	};
 
 	it("keeps attached file names when an exam is saved and reopened", () => {
-		const result = parseExamFile(serializeExam(exam));
+		const result = roundTripExam(exam);
 		expect(result.ok && result.definition.attachments).toEqual(exam.attachments);
 	});
 
 	it("leaves older exams without attachments unchanged", () => {
 		const { attachments: _attachments, ...plain } = exam;
-		const content = serializeExam(plain);
-		expect(content).not.toContain("examiner-attachments");
-		const result = parseExamFile(content);
+		expect(examRecord(plain)).not.toHaveProperty("attachments");
+		const result = roundTripExam(plain);
 		expect(result.ok && "attachments" in result.definition).toBe(false);
 	});
 
 	it("skips unsafe or unsupported names instead of rejecting the exam", () => {
-		const result = parseExamFile(
-			"---\nexaminer: exam\nexaminer-id: e\nexaminer-attachments:\n  - ok.pdf\n  - ../evil.pdf\n  - virus.exe\n  - ok.pdf\n---\n",
-		);
+		const result = parseExamRecord("e", { attachments: ["ok.pdf", "../evil.pdf", "virus.exe", "ok.pdf"] });
 		expect(result.ok && result.definition.attachments).toEqual(["ok.pdf"]);
 	});
 });

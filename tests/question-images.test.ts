@@ -1,42 +1,37 @@
 import { describe, expect, it } from "vitest";
 import { blankFlashcard, type QuestionDefinition } from "../src/core/definition";
 import { markExam, prepareExam, type CalculationItem } from "../src/core/exam";
-import { parseExamFile, serializeExam } from "../src/storage/exam-format";
-import { parseQuestionFile, serializeQuestion } from "../src/storage/question-format";
-import { basicAddition, seededRandom } from "./helpers";
+import { parseQuestionRecord, questionRecord } from "../src/storage/question-format";
+import { basicAddition, roundTripExam, roundTripQuestion, seededRandom } from "./helpers";
 
-describe("question images in files", () => {
+describe("question images in records", () => {
 	it("saves image names and restores them when the question is reopened", () => {
 		const question = basicAddition({ id: "q-img", images: ["circuit.png", "graph (2).jpg"] });
-		const content = serializeQuestion(question);
-		expect(content).toContain("examiner-images:");
-		const result = parseQuestionFile(content);
+		expect(questionRecord(question).images).toEqual(question.images);
+		const result = roundTripQuestion(question);
 		expect(result.ok && result.definition.images).toEqual(["circuit.png", "graph (2).jpg"]);
 	});
 
 	it("keeps images on flashcards too", () => {
 		const card: QuestionDefinition = { ...basicAddition({ id: "q-card" }), kind: "flashcard", flashcard: { ...blankFlashcard(), answer: "A" }, images: ["diagram.webp"] };
-		const result = parseQuestionFile(serializeQuestion(card));
+		const result = roundTripQuestion(card);
 		expect(result.ok && result.definition.images).toEqual(["diagram.webp"]);
 	});
 
 	it("leaves questions without images unchanged", () => {
-		const content = serializeQuestion(basicAddition());
-		expect(content).not.toContain("examiner-images");
-		const result = parseQuestionFile(content);
+		expect(questionRecord(basicAddition())).not.toHaveProperty("images");
+		const result = roundTripQuestion(basicAddition());
 		expect(result.ok && "images" in result.definition).toBe(false);
 	});
 
 	it("skips names that are unsafe or not images instead of rejecting the question", () => {
-		const result = parseQuestionFile(
-			"---\nexaminer: question\nexaminer-id: q\nexaminer-images:\n  - ok.png\n  - sheet.pdf\n  - ../escape.png\n  - ok.png\n---\nPrompt",
-		);
+		const result = parseQuestionRecord("q", { images: ["ok.png", "sheet.pdf", "../escape.png", "ok.png"], prompt: "Prompt" });
 		expect(result.ok && result.definition.images).toEqual(["ok.png"]);
 	});
 
 	it("still reads exam attachments with the shared reader", () => {
 		const exam = { id: "e", title: "E", tags: [], timeLimitMinutes: null, passingPercent: 40, questions: [], attachments: ["sheet.pdf", "chart.png"] };
-		const result = parseExamFile(serializeExam(exam));
+		const result = roundTripExam(exam);
 		expect(result.ok && result.definition.attachments).toEqual(["sheet.pdf", "chart.png"]);
 	});
 });
