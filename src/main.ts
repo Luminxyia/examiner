@@ -16,6 +16,7 @@ import { LoadState } from "./storage/load-state";
 import { AttemptView, VIEW_TYPE_ATTEMPT, type AttemptViewState } from "./ui/attempt-view";
 import { ExamEditorView, VIEW_TYPE_EXAM_EDITOR, type ExamEditorState } from "./ui/exam-editor-view";
 import { ExamPickerModal } from "./ui/exam-picker";
+import { renderDiagram } from "./ui/diagram";
 import { ExamSessionView, VIEW_TYPE_EXAM_SESSION } from "./ui/exam-session-view";
 import { OverviewView, VIEW_TYPE_OVERVIEW } from "./ui/overview-view";
 import { ExamsView, VIEW_TYPE_EXAMS } from "./ui/exams-view";
@@ -81,6 +82,8 @@ export default class ExaminerPlugin extends Plugin {
 		this.registerView(VIEW_TYPE_QUESTIONS, (leaf) => new QuestionsView(leaf, this));
 		this.registerView(VIEW_TYPE_TUTOR, (leaf) => new TutorView(leaf, this));
 		this.registerView(VIEW_TYPE_UPCOMING_EXAM_EDITOR, (leaf) => new UpcomingExamEditorView(leaf, this));
+
+		this.registerMarkdownCodeBlockProcessor("examiner-diagram", (source, element) => renderDiagram(element, source));
 
 		this.addRibbonIcon("graduation-cap", "Examiner", () => void this.openOverview());
 

@@ -2158,3 +2158,24 @@ button.examiner-show-more {
 	max-height: 24rem;
 	height: auto;
 }
+
+.examiner-diagram {
+	color: var(--text-normal);
+	margin: var(--size-4-2) 0;
+}
+
+.examiner-diagram svg {
+	display: block;
+	max-width: 100%;
+	height: auto;
+	margin: 0 auto;
+}
+
+.examiner-diagram text {
+	font-family: var(--font-interface);
+}
+
+.examiner-diagram-errors {
+	font-family: var(--font-monospace);
+	font-size: var(--font-ui-small);
+}
