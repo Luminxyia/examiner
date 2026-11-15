@@ -1,4 +1,5 @@
-import { loadMathJax, normalizePath, Notice, Plugin, type ViewState, type WorkspaceLeaf } from "obsidian";
+import { loadMathJax, normalizePath, Notice, Plugin, type Editor, type MarkdownPostProcessorContext, type ViewState, type WorkspaceLeaf } from "obsidian";
+import { diagramBlockText, replaceNoteBlock } from "./core/diagram-edit";
 import { hasErrors, validateDefinition, type QuestionDefinition } from "./core/definition";
 import type { ExamDefinition } from "./core/exam";
 import { MIN_SESSION_MS, StudyTracker } from "./core/study-time";
@@ -16,7 +17,8 @@ import { LoadState } from "./storage/load-state";
 import { AttemptView, VIEW_TYPE_ATTEMPT, type AttemptViewState } from "./ui/attempt-view";
 import { ExamEditorView, VIEW_TYPE_EXAM_EDITOR, type ExamEditorState } from "./ui/exam-editor-view";
 import { ExamPickerModal } from "./ui/exam-picker";
-import { renderDiagram } from "./ui/diagram";
+import { addDiagramEditButton, renderDiagram } from "./ui/diagram";
+import { DiagramEditorModal } from "./ui/diagram-editor-modal";
 import { ExamSessionView, VIEW_TYPE_EXAM_SESSION } from "./ui/exam-session-view";
 import { OverviewView, VIEW_TYPE_OVERVIEW } from "./ui/overview-view";
 import { ExamsView, VIEW_TYPE_EXAMS } from "./ui/exams-view";
@@ -83,7 +85,10 @@ export default class ExaminerPlugin extends Plugin {
 		this.registerView(VIEW_TYPE_TUTOR, (leaf) => new TutorView(leaf, this));
 		this.registerView(VIEW_TYPE_UPCOMING_EXAM_EDITOR, (leaf) => new UpcomingExamEditorView(leaf, this));
 
-		this.registerMarkdownCodeBlockProcessor("examiner-diagram", (source, element) => renderDiagram(element, source));
+		this.registerMarkdownCodeBlockProcessor("examiner-diagram", (source, element, context) => {
+			renderDiagram(element, source);
+			if (context.sourcePath !== "") addDiagramEditButton(element, () => this.editNoteDiagram(element, context));
+		});
 
 		this.addRibbonIcon("graduation-cap", "Examiner", () => void this.openOverview());
 
@@ -116,6 +121,12 @@ export default class ExaminerPlugin extends Plugin {
 		});
 
 		this.addCommand({
+			id: "add-diagram",
+			name: "Add diagram",
+			editorCallback: (editor) => this.addNoteDiagram(editor),
+		});
+
+		this.addCommand({
 			id: "open-overview",
 			name: "Open study overview",
 			callback: () => void this.openOverview(),
@@ -125,6 +136,37 @@ export default class ExaminerPlugin extends Plugin {
 		await this.loadStudyTimer();
 		this.startStudyTracking();
 		this.app.workspace.onLayoutReady(() => void this.initialiseLibraries());
+	}
+
+	private addNoteDiagram(editor: Editor): void {
+		const cursor = editor.getCursor();
+		new DiagramEditorModal(this.app, "", (source) => {
+			const line = editor.getLine(cursor.line);
+			let before = "";
+			if (cursor.ch > 0) before = "\n";
+			let after = "";
+			if (cursor.ch < line.length) after = "\n";
+			editor.replaceRange(before + diagramBlockText(source) + after, cursor);
+		}).open();
+	}
+
+	private editNoteDiagram(element: HTMLElement, context: MarkdownPostProcessorContext): void {
+		const info = context.getSectionInfo(element);
+		const file = this.app.vault.getFileByPath(context.sourcePath);
+		if (info === null || file === null) {
+			new Notice("Could not find this diagram in the note.");
+			return;
+		}
+		const lines = info.text.split(/\r?\n/);
+		const source = lines.slice(info.lineStart + 1, info.lineEnd).join("\n");
+		new DiagramEditorModal(this.app, source, (edited) => {
+			void this.app.vault.process(file, (note) => {
+				const updated = replaceNoteBlock(note, info.lineStart, info.lineEnd, edited);
+				if (updated !== null) return updated;
+				new Notice("The note changed while the diagram was open, so it was not saved.");
+				return note;
+			});
+		}).open();
 	}
 
 	override onunload(): void {

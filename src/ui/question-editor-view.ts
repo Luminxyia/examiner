@@ -38,6 +38,8 @@ import { withoutDefaultTags } from "../example";
 import { questionRecord } from "../storage/question-format";
 import { isVaultReference } from "../storage/attachments";
 import { addAttachments, renderAttachmentPicker, renderQuestionImages } from "./attachment-picker";
+import { findDiagramBlocks, insertDiagramBlock, replaceDiagramBlock } from "../core/diagram-edit";
+import { DiagramEditorModal } from "./diagram-editor-modal";
 import { createPromptEditor } from "./prompt-editor";
 import { confirm, iconAction, renderLoadState, renderMarkdown, renderWorking, section, textButton } from "./shared";
 import { renderTagEditor } from "./tag-editor";
@@ -128,6 +130,7 @@ export class QuestionEditorView extends ItemView {
 	private pendingNew = false;
 	private dragging: { list: unknown[]; index: number } | null = null;
 	private imagesEl: HTMLElement | null = null;
+	private diagramsEl: HTMLElement | null = null;
 
 	private formRendered = false;
 	private previewToken = 0;
@@ -371,6 +374,7 @@ export class QuestionEditorView extends ItemView {
 		this.formRendered = true;
 		this.calculatedEl = null;
 		this.imagesEl = null;
+		this.diagramsEl = null;
 		this.renderDetailsSection();
 		if (this.draft.kind === "flashcard") {
 			this.renderFlashcardQuestionSection();
@@ -457,11 +461,51 @@ export class QuestionEditorView extends ItemView {
 
 	private renderFlashcardQuestionSection(): void {
 		const body = this.section("flashcard-question", "Question");
-		const area = this.textArea(body, "prompt", this.draft.prompt, (value) => (this.draft.prompt = value));
+		const area = this.textArea(body, "prompt", this.draft.prompt, (value) => {
+			this.draft.prompt = value;
+			this.renderDiagramButtons();
+		});
 		area.setAttribute("aria-label", "Question");
 		area.placeholder = "What is resonant frequency?";
 		this.slot(body, "prompt");
+		this.renderDiagramsField(body);
 		this.renderImagesField(body);
+	}
+
+	private renderDiagramsField(body: HTMLElement): void {
+		body.createDiv({ cls: "examiner-field-label", text: "Diagrams" });
+		this.diagramsEl = body.createDiv({ cls: "examiner-diagram-buttons" });
+		this.renderDiagramButtons();
+	}
+
+	private renderDiagramButtons(): void {
+		const el = this.diagramsEl;
+		if (el === null) return;
+		el.empty();
+		findDiagramBlocks(this.draft.prompt).forEach((block, index) => {
+			const button = textButton(el, `Diagram ${index + 1}`);
+			button.addEventListener("click", () => {
+				new DiagramEditorModal(this.app, block.source, (source) => this.setPrompt(replaceDiagramBlock(this.draft.prompt, block, source))).open();
+			});
+		});
+		iconAction(el, "plus", "Add diagram").addEventListener("click", () => this.addDiagram());
+	}
+
+	private promptCursor(): number {
+		if (this.promptEditor !== null) return this.promptEditor.state.selection.main.head;
+		const area = this.inputsByPath.get("prompt");
+		if (area instanceof HTMLTextAreaElement) return area.selectionStart;
+		return this.draft.prompt.length;
+	}
+
+	private addDiagram(): void {
+		const offset = this.promptCursor();
+		new DiagramEditorModal(this.app, "", (source) => this.setPrompt(insertDiagramBlock(this.draft.prompt, offset, source))).open();
+	}
+
+	private setPrompt(prompt: string): void {
+		this.draft.prompt = prompt;
+		this.changed(true);
 	}
 
 	private renderImagesField(body: HTMLElement): void {
@@ -585,9 +629,11 @@ export class QuestionEditorView extends ItemView {
 		this.promptEditor = createPromptEditor(container, this.draft.prompt, options, (text) => {
 			this.draft.prompt = text;
 			this.changed();
+			this.renderDiagramButtons();
 		});
 		this.inputsByPath.set("prompt", container);
 		this.slot(body, "prompt");
+		this.renderDiagramsField(body);
 		this.renderImagesField(body);
 	}
 

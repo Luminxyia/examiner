@@ -2179,3 +2179,219 @@ button.examiner-show-more {
 	font-family: var(--font-monospace);
 	font-size: var(--font-ui-small);
 }
+
+.examiner-diagram-knockout {
+	fill: var(--background-primary);
+}
+
+.examiner-question .examiner-diagram-knockout {
+	fill: var(--background-primary-alt);
+}
+
+.examiner-diagram-label {
+	paint-order: stroke;
+	stroke: var(--background-primary);
+	stroke-width: 4px;
+	stroke-linejoin: round;
+}
+
+.examiner-question .examiner-diagram-label {
+	stroke: var(--background-primary-alt);
+}
+
+.examiner-diagram-editable {
+	position: relative;
+}
+
+.examiner-diagram-edit {
+	position: absolute;
+	top: 0;
+	right: var(--size-4-8);
+	opacity: 0;
+}
+
+.examiner-diagram-editable:hover .examiner-diagram-edit,
+.examiner-diagram-edit:focus-visible {
+	opacity: 1;
+}
+
+.examiner-diagram-buttons {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--size-4-2);
+}
+
+.modal.examiner-diagram-editor-modal {
+	width: min(72rem, 95vw);
+	height: min(48rem, 92vh);
+}
+
+.examiner-diagram-editor-toolbar {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--size-2-2);
+	margin-bottom: var(--size-4-2);
+}
+
+.examiner-diagram-editor-toolbar .is-disabled {
+	opacity: 0.4;
+	pointer-events: none;
+}
+
+.examiner-diagram-editor-main {
+	display: flex;
+	gap: var(--size-4-4);
+	align-items: stretch;
+}
+
+.examiner-diagram-editor-drawing {
+	display: flex;
+	flex: 1 1 auto;
+	flex-direction: column;
+	min-width: 0;
+}
+
+.examiner-diagram-editor-code {
+	display: flex;
+	flex: 0 0 20rem;
+	flex-direction: column;
+	gap: var(--size-4-2);
+	min-width: 0;
+}
+
+.examiner-diagram-editor-canvas {
+	border: var(--border-width) solid var(--background-modifier-border);
+	border-radius: var(--radius-m);
+	background-color: var(--background-primary);
+	touch-action: none;
+	user-select: none;
+}
+
+.examiner-diagram-editor-canvas .examiner-diagram {
+	margin: 0;
+}
+
+.examiner-diagram-editor-canvas svg {
+	width: 100%;
+	max-width: none;
+}
+
+.examiner-diagram-editor-canvas [data-line] {
+	cursor: pointer;
+}
+
+.examiner-diagram-editor-canvas .is-selected {
+	color: var(--interactive-accent);
+}
+
+.examiner-diagram-hit {
+	fill: none;
+	stroke: transparent;
+	stroke-width: 10px;
+	pointer-events: stroke;
+}
+
+.examiner-diagram-grid line {
+	stroke: var(--background-modifier-border);
+	stroke-width: 0.5px;
+}
+
+.examiner-diagram-grid line.is-major {
+	stroke: var(--background-modifier-border-hover);
+}
+
+.examiner-diagram-handle {
+	fill: var(--background-primary);
+	stroke: var(--interactive-accent);
+	stroke-width: 1.5px;
+	cursor: grab;
+}
+
+.examiner-diagram-handle.is-selected {
+	fill: var(--interactive-accent);
+}
+
+.examiner-diagram-editor-panel {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: flex-end;
+	gap: var(--size-4-2) var(--size-4-3);
+	min-height: 9rem;
+	margin-top: var(--size-4-3);
+}
+
+.examiner-diagram-editor-panel .examiner-field {
+	width: 10rem;
+}
+
+.examiner-diagram-editor-panel .examiner-diagram-editor-heading {
+	flex-basis: 100%;
+}
+
+.examiner-diagram-editor-panel input[type="text"],
+.examiner-diagram-editor-panel select {
+	width: 100%;
+}
+
+.examiner-diagram-editor-heading {
+	font-weight: var(--font-semibold);
+}
+
+.examiner-diagram-editor-check {
+	display: flex;
+	align-items: center;
+	gap: var(--size-2-3);
+}
+
+.examiner-diagram-editor-text {
+	flex: 1 1 auto;
+	width: 100%;
+	min-height: 12rem;
+	resize: none;
+	font-family: var(--font-monospace);
+	font-size: var(--font-ui-small);
+}
+
+@media (max-width: 700px) {
+	.examiner-diagram-editor-main {
+		flex-direction: column;
+	}
+
+	.examiner-diagram-editor-code {
+		flex-basis: auto;
+	}
+}
+
+.examiner-diagram-editor-toolbar .clickable-icon.is-active {
+	color: var(--interactive-accent);
+	background-color: var(--background-modifier-hover);
+}
+
+.examiner-diagram-editor-divider {
+	width: var(--border-width);
+	align-self: stretch;
+	margin: 0 var(--size-2-2);
+	background-color: var(--background-modifier-border);
+}
+
+.examiner-diagram-editor-canvas svg.is-drawing {
+	cursor: crosshair;
+}
+
+.examiner-diagram-preview {
+	fill: none;
+	stroke: var(--interactive-accent);
+	stroke-width: 1.5px;
+	stroke-dasharray: 6 4;
+}
+
+.examiner-diagram-marquee {
+	fill: var(--interactive-accent);
+	fill-opacity: 0.08;
+	stroke: var(--interactive-accent);
+	stroke-width: 1px;
+	stroke-dasharray: 4 3;
+	pointer-events: none;
+}

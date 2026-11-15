@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseDiagram, type DiagramShape } from "../src/core/diagram";
+import { findJunctions, parseDiagram, type DiagramShape } from "../src/core/diagram";
 
 const POINTS = ["point A at 0, 0", "point B at 4, 0", "point C at 4, 3"].join("\n");
 
@@ -150,5 +150,85 @@ describe("errors", () => {
 
 	it("reports every bad line in order", () => {
 		expect(errorsOf("line A B\npoint A at 0, 0\nfoo")).toEqual(["Line 1: Point B is not defined.", 'Line 3: "foo" is not a diagram command.']);
+	});
+});
+
+describe("symbols", () => {
+	it("places a symbol between two points", () => {
+		const [resistor] = shapesOf('resistor from A to B label "R1"');
+		expect(resistor).toMatchObject({ kind: "connected-symbol", symbol: "resistor", size: 1, label: { text: "R1" } });
+	});
+
+	it("rejects points too close for the symbol", () => {
+		const source = "point A at 0, 0\npoint B at 0.5, 0\nresistor from A to B";
+		expect(errorsOf(source)).toEqual(["Line 3: The points are too close for a resistor. It needs a gap of at least 1."]);
+	});
+
+	it("places a symbol at a point with an angle and size", () => {
+		const [support] = shapesOf("pin-support at A angle 90 size 0.5");
+		expect(support).toMatchObject({ kind: "placed-symbol", symbol: "pin-support", angle: 90, size: 0.5 });
+	});
+
+	it("reads a pulley radius as its size", () => {
+		const [pulley] = shapesOf("pulley at A radius 2");
+		expect(pulley).toMatchObject({ kind: "placed-symbol", symbol: "pulley", size: 2 });
+	});
+
+	it("creates connection points for named symbols", () => {
+		const shapes = shapesOf("npn TV1 at C\nwire TV1.b A\nwire TV1.c B\nwire TV1.e A");
+		expect(shapes[0]).toMatchObject({ kind: "named-symbol", name: "TV1" });
+		const wire = shapes[1];
+		expect(wire?.kind === "wire" && wire.points[0]).toEqual({ x: 3, y: 3 });
+	});
+
+	it("turns connection points with the symbol", () => {
+		const [opamp] = shapesOf("opamp U1 at A angle 90");
+		expect(opamp?.kind).toBe("named-symbol");
+		if (opamp?.kind !== "named-symbol") return;
+		const out = opamp.terminals[2];
+		expect(out?.x).toBeCloseTo(0);
+		expect(out?.y).toBeCloseTo(1);
+	});
+
+	it("lets connection points be used before the symbol line", () => {
+		expect(parseDiagram(`${POINTS}\nwire TV1.b A\nnpn TV1 at C`).errors).toEqual([]);
+	});
+
+	it("names unknown connection points", () => {
+		expect(errorsOf(`${POINTS}\nnpn TV1 at C\nwire TV1.x A`)).toEqual(["Line 5: Point TV1.x is not defined."]);
+	});
+
+	it("rejects two symbols with the same name", () => {
+		expect(errorsOf(`${POINTS}\nnpn TV1 at C\npnp TV1 at A`)).toEqual(["Line 5: TV1 is already used by another symbol."]);
+	});
+
+	it("rejects symbol names as point names", () => {
+		expect(errorsOf("point resistor at 0, 0")).toEqual(['Line 1: "resistor" cannot be used as a point name.']);
+	});
+});
+
+describe("junctions", () => {
+	function junctionsOf(lines: string): { x: number; y: number }[] {
+		return findJunctions(shapesOf(lines));
+	}
+
+	it("adds a dot where a wire ends on another wire's corner", () => {
+		expect(junctionsOf("point D at 4, -3\nwire A B C\nwire B D")).toEqual([{ x: 4, y: 0 }]);
+	});
+
+	it("does not add a dot at a simple corner or end", () => {
+		expect(junctionsOf("wire A B C")).toEqual([]);
+	});
+
+	it("counts symbol ends as connections", () => {
+		expect(junctionsOf("point D at 4, -3\nresistor from A to B\nwire B C\nwire B D")).toEqual([{ x: 4, y: 0 }]);
+	});
+
+	it("never adds dots for ordinary lines", () => {
+		expect(junctionsOf("line A B\nline B C\nline A B C")).toEqual([]);
+	});
+
+	it("skips dots on terminal symbols", () => {
+		expect(junctionsOf("point D at 4, -3\nwire A B\nwire B C\nwire B D\nterminal at B")).toEqual([]);
 	});
 });
