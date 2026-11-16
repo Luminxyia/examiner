@@ -3,7 +3,7 @@ import type { ExamDefinition } from "../src/core/exam";
 import { examRecord, parseExamRecord } from "../src/storage/exam-format";
 import { roundTripExam } from "./helpers";
 
-const exam: ExamDefinition = { id: "e-1", title: "Mock", tags: [], timeLimitMinutes: null, passingPercent: 40, questions: [] };
+const exam: ExamDefinition = { id: "e-1", title: "Mock", tags: [], timeLimitMinutes: null, questions: [] };
 
 describe("exam formula sheet", () => {
 	it("keeps the text exactly, including LaTeX and line breaks", () => {

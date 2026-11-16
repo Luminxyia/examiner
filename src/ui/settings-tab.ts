@@ -1,5 +1,7 @@
-import { PluginSettingTab, type SettingDefinitionItem } from "obsidian";
+import { PluginSettingTab, type SettingDefinition, type SettingDefinitionItem } from "obsidian";
+import { gradeBoundaryIssue } from "../core/grades";
 import type ExaminerPlugin from "../main";
+import { gradeBoundaries, type ExaminerSettings } from "../settings";
 import { confirm } from "./shared";
 
 export class ExaminerSettingTab extends PluginSettingTab {
@@ -28,7 +30,37 @@ export class ExaminerSettingTab extends PluginSettingTab {
 				disabled: () => this.resetting,
 				action: () => void this.reset(),
 			},
+			{
+				type: "group",
+				heading: "Grade boundaries",
+				items: [
+					this.gradeSetting("A+", "gradeAPlus"),
+					this.gradeSetting("A", "gradeA"),
+					this.gradeSetting("B", "gradeB"),
+					this.gradeSetting("C", "gradeC"),
+					this.gradeSetting("D", "gradeD"),
+				],
+			},
 		];
+	}
+
+	private gradeSetting(letter: string, key: keyof ExaminerSettings): SettingDefinition {
+		return {
+			name: letter,
+			aliases: ["grade", "boundary", "letter"],
+			control: {
+				type: "number",
+				key,
+				min: 1,
+				max: 100,
+				step: 1,
+				validate: (value) => {
+					const candidate = { ...this.plugin.settings, [key]: value };
+					const issue = gradeBoundaryIssue(gradeBoundaries(candidate));
+					if (issue !== null) return issue;
+				},
+			},
+		};
 	}
 
 	private async reset(): Promise<void> {

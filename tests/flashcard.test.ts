@@ -116,7 +116,6 @@ describe("mixed exams", () => {
 		title: "Mixed",
 		tags: [],
 		timeLimitMinutes: null,
-		passingPercent: 40,
 		questions: [
 			{ questionId: "q-calc", count: 1 },
 			{ questionId: "q-written", count: 2 },
@@ -214,7 +213,7 @@ describe("mixed exams", () => {
 describe("items saved before marks existed", () => {
 	it("treats them as worth 1 mark each", () => {
 		const legacy = prepareExam(
-			{ id: "e", title: "Old", tags: [], timeLimitMinutes: null, passingPercent: 50, questions: [{ questionId: "q", count: 2 }] },
+			{ id: "e", title: "Old", tags: [], timeLimitMinutes: null, questions: [{ questionId: "q", count: 2 }] },
 			() => basicAddition({ id: "q" }),
 			seededRandom(1),
 		).items.map(({ marks: _marks, ...item }) => item as ExamItem);

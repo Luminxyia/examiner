@@ -78,7 +78,7 @@ describe("saving an edited question", () => {
 		const original = await saveLikeTheEditor(library, basicAddition({ id: "q-orig" }));
 		await saveLikeTheEditor(library, { ...original, title: "Renamed" });
 		const { items, missing } = prepareExam(
-			{ id: "e", title: "Exam", tags: [], timeLimitMinutes: null, passingPercent: 40, questions: [{ questionId: "q-orig", count: 1 }] },
+			{ id: "e", title: "Exam", tags: [], timeLimitMinutes: null, questions: [{ questionId: "q-orig", count: 1 }] },
 			(id) => library.get(id),
 			seededRandom(1),
 		);

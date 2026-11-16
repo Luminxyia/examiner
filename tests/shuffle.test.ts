@@ -14,7 +14,6 @@ const exam: ExamDefinition = {
 	title: "Ordered",
 	tags: [],
 	timeLimitMinutes: null,
-	passingPercent: 40,
 	questions: [
 		{ questionId: "q-a", count: 2 },
 		{ questionId: "q-b", count: 1 },

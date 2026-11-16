@@ -209,13 +209,12 @@ describe("JsonLibrary", () => {
 			title: "Mock",
 			tags: ["maths"],
 			timeLimitMinutes: 20,
-			passingPercent: 55,
 			questions: [{ questionId: "q-1", count: 2 }],
 			attachments: ["sheet.pdf"],
 			shuffle: true,
 		};
 		await exams.create(exam);
-		await exams.create({ id: "e-2", title: "Untimed", tags: [], timeLimitMinutes: null, passingPercent: 50, questions: [] });
+		await exams.create({ id: "e-2", title: "Untimed", tags: [], timeLimitMinutes: null, questions: [] });
 		const fresh = new JsonLibrary(files, format, "examiner/exams.json");
 		await fresh.load();
 		expect(fresh.get("e-1")).toEqual(exam);

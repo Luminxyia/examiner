@@ -1,6 +1,7 @@
 import { ItemView, type ViewStateResult, type WorkspaceLeaf } from "obsidian";
 import { examHistory } from "../core/statistics";
 import type ExaminerPlugin from "../main";
+import { gradeBoundaries } from "../settings";
 import { toAttemptSummary, type ExamResultRecord } from "../storage/results";
 import { renderExamResult } from "./exam-results";
 import { renderEmptyState, textButton } from "./shared";
@@ -73,6 +74,7 @@ export class AttemptView extends ItemView {
 				backLabel: "Back to overview",
 				onBack: () => void this.plugin.openOverview(),
 				imageAccess: this.plugin.questionImageAccess,
+				gradeBoundaries: gradeBoundaries(this.plugin.settings),
 			});
 		} else if (records.length > 0 || this.attemptId) {
 			renderEmptyState(root, "This attempt could not be found.");

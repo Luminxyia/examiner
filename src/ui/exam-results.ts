@@ -1,6 +1,7 @@
 import type { App, Component } from "obsidian";
 import { attemptText, itemMarks, type ExamItemResult, type ItemOutcome } from "../core/exam";
 import { workedSteps } from "../core/generate";
+import { letterGrade, type GradeBoundaries } from "../core/grades";
 import { formatDuration } from "../core/statistics";
 import type { ExamResultRecord } from "../storage/results";
 import { renderQuestionImages, type AttachmentAccess } from "./attachment-picker";
@@ -48,6 +49,7 @@ export interface ResultHeader {
 	backLabel: string;
 	onBack: () => void;
 	imageAccess?: AttachmentAccess;
+	gradeBoundaries: GradeBoundaries;
 }
 
 export async function renderExamResult(
@@ -70,7 +72,9 @@ export async function renderExamResult(
 	const title = [record.examTitle || "Untitled exam", header.attemptLabel].filter(Boolean).join(" ");
 	top.createDiv({ cls: "examiner-eyebrow", text: title });
 	textButton(top, header.backLabel).addEventListener("click", header.onBack);
-	hero.createDiv({ cls: "examiner-score", text: formatPercent(summary.percent) });
+	const scoreRow = hero.createDiv({ cls: "examiner-score-row" });
+	scoreRow.createDiv({ cls: "examiner-score", text: formatPercent(summary.percent) });
+	scoreRow.createDiv({ cls: "examiner-score examiner-score-grade", text: letterGrade(summary.percent, header.gradeBoundaries) });
 	const marks = summary.marks ?? summary.correct;
 	const maxMarks = summary.maxMarks ?? summary.total;
 	hero.createDiv({ cls: "examiner-score-caption", text: `${formatMarks(marks)} of ${formatMarks(maxMarks)} ${maxMarks === 1 ? "mark" : "marks"}` });

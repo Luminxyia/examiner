@@ -1041,7 +1041,8 @@ export class QuestionEditorView extends ItemView {
 			card.options.forEach((option, index) => {
 				const row = tbody.createEl("tr", { cls: index === card.correct ? "examiner-answer-row" : "" });
 				row.createEl("td", { text: index === card.correct ? "Correct" : `Option ${index + 1}` });
-				row.createEl("td", { cls: "examiner-wrap", text: option });
+				const optionText = row.createEl("td", { cls: "examiner-choice-text" });
+				void renderMarkdown(this.app, optionText, option, this);
 			});
 		} else {
 			const row = tbody.createEl("tr", { cls: "examiner-answer-row" });

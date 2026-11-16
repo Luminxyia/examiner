@@ -23,7 +23,6 @@ export interface ExamDefinition {
 	title: string;
 	tags: string[];
 	timeLimitMinutes: number | null;
-	passingPercent: number;
 	questions: ExamQuestionRef[];
 	attachments?: string[];
 	formulaSheet?: string;
@@ -336,21 +335,10 @@ export function parseTimeLimit(raw: unknown): number | null | undefined {
 	return minutes > 0 ? minutes : undefined;
 }
 
-export const DEFAULT_PASSING_PERCENT = 40;
-
-export const LEGACY_PASSING_PERCENT = 50;
-
-export function isValidPassingPercent(value: number): boolean {
-	return Number.isInteger(value) && value >= 0 && value <= 100;
-}
-
 export function validateExam(exam: ExamDefinition): ValidationIssue[] {
 	const issues: ValidationIssue[] = [];
 	if (exam.title.trim() === "") issues.push({ path: "title", severity: "error", message: "Give the exam a title." });
 	if (exam.questions.length === 0) issues.push({ path: "questions", severity: "error", message: "Add at least one question." });
-	if (!isValidPassingPercent(exam.passingPercent)) {
-		issues.push({ path: "passingPercent", severity: "error", message: "The passing grade must be a whole number from 0 to 100." });
-	}
 	exam.questions.forEach((ref, index) => {
 		if (!Number.isInteger(ref.count) || ref.count < 1) {
 			issues.push({ path: `questions.${index}.count`, severity: "error", message: "Use a whole number of at least 1." });

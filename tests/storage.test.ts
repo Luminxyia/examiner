@@ -167,7 +167,6 @@ describe("exam records", () => {
 		title: "Mock exam",
 		tags: ["circuits"],
 		timeLimitMinutes: 90,
-		passingPercent: 70,
 		questions: [
 			{ questionId: "q-1", count: 2 },
 			{ questionId: "q-2", count: 1 },
@@ -183,24 +182,6 @@ describe("exam records", () => {
 	it("writes the time limit as a readable duration", () => {
 		expect(examRecord(exam).timeLimit).toBe("1hr 30min");
 		expect(examRecord({ ...exam, timeLimitMinutes: null }).timeLimit).toBe("none");
-	});
-
-	it("stores the passing grade and defaults an exam without one to 50%", () => {
-		expect(examRecord(exam).passingGrade).toBe(70);
-		const without = parseExamRecord("e", { questions: ["q-1"] });
-		expect(without.ok && without.definition.passingPercent).toBe(50);
-		const withPercentSign = parseExamRecord("e", { passingGrade: "65%" });
-		expect(withPercentSign.ok && withPercentSign.definition.passingPercent).toBe(65);
-		for (const edge of [0, 100]) {
-			const parsed = parseExamRecord("e", { passingGrade: edge });
-			expect(parsed.ok && parsed.definition.passingPercent).toBe(edge);
-		}
-	});
-
-	it.each(["101", "-1", "50.5", "half"])("rejects a passing grade of %s", (value) => {
-		const parsed = parseExamRecord("e", { passingGrade: value });
-		expect(parsed.ok).toBe(false);
-		if (!parsed.ok) expect(parsed.errors.join(" ")).toContain("whole number from 0 to 100");
 	});
 
 	it("accepts bare IDs and rejects bad counts and durations", () => {

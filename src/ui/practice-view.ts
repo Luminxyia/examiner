@@ -332,7 +332,8 @@ export class PracticeView extends ItemView {
 				const button = list.createEl("button", { cls: "examiner-choice", attr: { role: "radio", "aria-checked": String(chosen) } });
 				button.toggleClass("is-selected", chosen);
 				button.createSpan({ cls: "examiner-choice-key", text: String.fromCharCode(65 + (index % 26)) });
-				button.createSpan({ cls: "examiner-choice-text", text: option });
+				const optionText = button.createSpan({ cls: "examiner-choice-text" });
+				void renderMarkdown(this.app, optionText, option, this);
 				button.disabled = attempt !== null;
 				if (index === 0) button.dataset.autofocus = "";
 				button.addEventListener("click", () => this.judgeFlashcard(question, card, option, index === card.correct ? "correct" : "incorrect"));

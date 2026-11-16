@@ -1,6 +1,7 @@
 import { Modal } from "obsidian";
 import { formatDuration, type NumberedAttempt } from "../core/statistics";
 import type ExaminerPlugin from "../main";
+import { gradeBoundaries } from "../settings";
 import { GradeChart, gradePoints } from "./charts";
 import { formatDateTime, formatPercent, formatScore } from "./shared";
 
@@ -9,7 +10,6 @@ export class GradeHistoryModal extends Modal {
 		private readonly plugin: ExaminerPlugin,
 		private readonly examTitle: string,
 		private readonly history: readonly NumberedAttempt[],
-		private readonly passingPercent: number | null,
 	) {
 		super(plugin.app);
 	}
@@ -24,7 +24,7 @@ export class GradeHistoryModal extends Modal {
 			return;
 		}
 
-		new GradeChart(contentEl).update(gradePoints(this.history), false, this.passingPercent);
+		new GradeChart(contentEl).update(gradePoints(this.history), false, gradeBoundaries(this.plugin.settings));
 
 		const scroller = contentEl.createDiv({ cls: "examiner-table-scroll examiner-history-table" });
 		const table = scroller.createEl("table", { cls: "examiner-question-table" });

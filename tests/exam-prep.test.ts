@@ -81,7 +81,6 @@ describe("scope", () => {
 		title: "Mock",
 		tags: [],
 		timeLimitMinutes: null,
-		passingPercent: 50,
 		questions: [
 			{ questionId: "b", count: 3 },
 			{ questionId: "a", count: 1 },

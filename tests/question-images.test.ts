@@ -30,7 +30,7 @@ describe("question images in records", () => {
 	});
 
 	it("still reads exam attachments with the shared reader", () => {
-		const exam = { id: "e", title: "E", tags: [], timeLimitMinutes: null, passingPercent: 40, questions: [], attachments: ["sheet.pdf", "chart.png"] };
+		const exam = { id: "e", title: "E", tags: [], timeLimitMinutes: null, questions: [], attachments: ["sheet.pdf", "chart.png"] };
 		const result = roundTripExam(exam);
 		expect(result.ok && result.definition.attachments).toEqual(["sheet.pdf", "chart.png"]);
 	});
@@ -46,7 +46,6 @@ describe("question images in exams", () => {
 			title: "E",
 			tags: [],
 			timeLimitMinutes: null,
-			passingPercent: 40,
 			questions: [
 				{ questionId: "q-img", count: 2 },
 				{ questionId: "q-plain", count: 1 },

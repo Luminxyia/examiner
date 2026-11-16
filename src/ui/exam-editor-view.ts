@@ -2,9 +2,7 @@ import type { EditorView } from "@codemirror/view";
 import { DropdownComponent, ItemView, Notice, setIcon, Setting, type ViewStateResult, type WorkspaceLeaf } from "obsidian";
 import { hasErrors, QUESTION_KIND_NAMES, type ValidationIssue } from "../core/definition";
 import {
-	DEFAULT_PASSING_PERCENT,
 	formatTimeLimit,
-	isValidPassingPercent,
 	TIME_LIMIT_PRESETS,
 	validateExam,
 	type ExamDefinition,
@@ -27,7 +25,7 @@ export interface ExamEditorState {
 const ALL_TAGS = "";
 
 function blankExam(): ExamDefinition {
-	return { id: createId("e"), title: "", tags: [], timeLimitMinutes: null, passingPercent: DEFAULT_PASSING_PERCENT, questions: [] };
+	return { id: createId("e"), title: "", tags: [], timeLimitMinutes: null, questions: [] };
 }
 
 export class ExamEditorView extends ItemView {
@@ -41,7 +39,6 @@ export class ExamEditorView extends ItemView {
 	private listEl: HTMLElement | null = null;
 	private availableEl: HTMLElement | null = null;
 	private titleIssuesEl: HTMLElement | null = null;
-	private passingIssuesEl: HTMLElement | null = null;
 	private questionIssuesEl: HTMLElement | null = null;
 	private attachmentsEl: HTMLElement | null = null;
 	private formulaEditor: EditorView | null = null;
@@ -215,22 +212,6 @@ export class ExamEditorView extends ItemView {
 					this.updateActions();
 				});
 			});
-
-		new Setting(details).setName("Passing grade").addText((text) => {
-			text.inputEl.type = "number";
-			text.inputEl.min = "0";
-			text.inputEl.max = "100";
-			text.inputEl.step = "1";
-			text.inputEl.addClass("examiner-count-input");
-			text.inputEl.setAttribute("aria-label", "Passing grade, percent");
-			text.setValue(String(this.exam.passingPercent)).onChange((value) => {
-				this.exam.passingPercent = value.trim() === "" ? Number.NaN : Number(value);
-				text.inputEl.toggleClass("examiner-invalid", !isValidPassingPercent(this.exam.passingPercent));
-				this.renderIssues();
-			});
-			text.inputEl.insertAdjacentElement("afterend", createSpan({ cls: "examiner-muted", text: "%" }));
-		});
-		this.passingIssuesEl = details.createDiv({ cls: "examiner-field-issues" });
 
 		new Setting(details).setName("Randomize question order").addToggle((toggle) =>
 			toggle.setValue(this.exam.shuffle === true).onChange((value) => {
@@ -430,7 +411,6 @@ export class ExamEditorView extends ItemView {
 			for (const issue of issues.filter(matches)) el.createDiv({ cls: "examiner-error-text", text: issue.message });
 		};
 		show(this.titleIssuesEl, (issue) => issue.path === "title");
-		show(this.passingIssuesEl, (issue) => issue.path === "passingPercent");
 		show(this.questionIssuesEl, (issue) => issue.path.startsWith("questions"));
 		this.updateActions();
 	}

@@ -70,7 +70,7 @@ describe("vault references", () => {
 	it("keeps vault references when questions and exams are saved and reopened", () => {
 		const question = roundTripQuestion(basicAddition({ images: ["vault:Images/circuit.png", "local.png"] }));
 		expect(question.ok && question.definition.images).toEqual(["vault:Images/circuit.png", "local.png"]);
-		const exam = roundTripExam({ id: "e", title: "E", tags: [], timeLimitMinutes: null, passingPercent: 40, questions: [], attachments: ["vault:Sheets/formulae.pdf"] });
+		const exam = roundTripExam({ id: "e", title: "E", tags: [], timeLimitMinutes: null, questions: [], attachments: ["vault:Sheets/formulae.pdf"] });
 		expect(exam.ok && exam.definition.attachments).toEqual(["vault:Sheets/formulae.pdf"]);
 	});
 });

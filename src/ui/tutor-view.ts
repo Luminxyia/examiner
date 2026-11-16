@@ -1,6 +1,6 @@
 import { ItemView, Notice, type WorkspaceLeaf } from "obsidian";
 import { groupAttemptsByExam } from "../core/statistics";
-import { DEFAULT_PASSING_PERCENT, type ExamDefinition } from "../core/exam";
+import type { ExamDefinition } from "../core/exam";
 import { collectPrepAttempts, type UpcomingExam } from "../core/exam-prep";
 import {
 	aggregateMistakes,
@@ -18,6 +18,7 @@ import {
 	type TargetCandidate,
 } from "../core/insights";
 import type ExaminerPlugin from "../main";
+import { gradeBoundaries } from "../settings";
 import { createId } from "../storage/format-shared";
 import { toAttemptSummary, type ExamResultRecord, type PracticeAttemptRecord } from "../storage/results";
 import { renderExamBoard } from "./exam-board";
@@ -102,7 +103,7 @@ export class TutorView extends ItemView {
 
 		const groups = groupAttemptsByExam(records.map(toAttemptSummary), (examId) => this.plugin.exams.get(examId)?.title);
 		const mistakes = aggregateMistakes(records, now);
-		const priorities = studyPriorities(groups, records, (examId) => this.passingPercent(examId), now);
+		const priorities = studyPriorities(groups, records, gradeBoundaries(this.plugin.settings).d, now);
 		renderExamBoard(root, this.plugin, upcomingExams, collectPrepAttempts(records, practiceAttempts), records.map(toAttemptSummary), now, this.selectedUpcomingId, (examId) => {
 			this.selectedUpcomingId = examId;
 			void this.render();
@@ -114,10 +115,6 @@ export class TutorView extends ItemView {
 
 	private updateTimerButton(): void {
 		if (this.timerButton) updateStudyTimerButton(this.timerButton, this.plugin);
-	}
-
-	private passingPercent(examId: string): number | null {
-		return this.plugin.exams.get(examId)?.passingPercent ?? null;
 	}
 
 	private renderFocus(root: HTMLElement, recommendation: Recommendation | null, priorities: readonly ExamPriority[], mistakes: readonly MistakeEntry[]): void {
@@ -225,7 +222,6 @@ export class TutorView extends ItemView {
 			title: focus ? `${focus}: targeted practice` : `Targeted practice (${date})`,
 			tags: [],
 			timeLimitMinutes: null,
-			passingPercent: DEFAULT_PASSING_PERCENT,
 			questions: selection.questionIds.map((questionId) => ({ questionId, count: 1 })),
 		};
 		const parts = [`${selection.fromMistakes === 1 ? "1 question" : `${selection.fromMistakes} questions`} you got wrong`];

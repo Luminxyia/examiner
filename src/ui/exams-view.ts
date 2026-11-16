@@ -169,7 +169,7 @@ export class ExamsView extends ItemView {
 				.setTitle("Grade history")
 				.setIcon("trending-up")
 				.setDisabled(history.length === 0)
-				.onClick(() => new GradeHistoryModal(this.plugin, exam.title || "Untitled exam", history, exam.passingPercent).open()),
+				.onClick(() => new GradeHistoryModal(this.plugin, exam.title || "Untitled exam", history).open()),
 		);
 		menu.addItem((item) =>
 			item

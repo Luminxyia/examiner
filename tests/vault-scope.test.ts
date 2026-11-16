@@ -129,7 +129,16 @@ describe("VaultFiles", () => {
 
 describe("settings on a fresh install", () => {
 	it("uses the defaults when there is no saved data", () => {
-		expect(initialSettings(null)).toEqual({ exampleCreated: false, reuseFolder: "", dataFolder: "examiner" });
+		expect(initialSettings(null)).toEqual({
+			exampleCreated: false,
+			reuseFolder: "",
+			dataFolder: "examiner",
+			gradeAPlus: 90,
+			gradeA: 70,
+			gradeB: 60,
+			gradeC: 50,
+			gradeD: 40,
+		});
 	});
 
 	it("keeps saved values over the defaults", () => {

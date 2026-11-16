@@ -194,7 +194,7 @@ const plural = (count: number, noun: string) => `${count} ${noun}${count === 1 ?
 export function studyPriorities(
 	groups: readonly ExamGroup[],
 	records: readonly InsightAttempt[],
-	passingPercent: (examId: string) => number | null,
+	failingBelow: number,
 	now: Date,
 ): ExamPriority[] {
 	const priorities = groups.map((group): ExamPriority => {
@@ -204,7 +204,6 @@ export function studyPriorities(
 			(sum, record) => sum + record.items.filter((item) => item.outcome !== "unanswered" && item.outcome !== "unknown").length,
 			0,
 		);
-		const passing = passingPercent(group.examId) ?? 50;
 		const latest = group.latest;
 		const recentScore = weightedRecentScore(group.attempts, now);
 		const change = group.trend.kind === "change" ? group.trend.points : 0;
@@ -216,17 +215,17 @@ export function studyPriorities(
 			status = "not-enough-evidence";
 			if (group.attempts.length < MIN_ATTEMPTS_FOR_PRIORITY) reasons.push(`Based on ${plural(group.attempts.length, "attempt")}`);
 		} else {
-			const strong = Math.max(STRONG_SCORE, passing + 20);
-			const belowPassing = latest.percent < passing && recentScore < passing;
+			const strong = Math.max(STRONG_SCORE, failingBelow + 20);
+			const failing = latest.percent < failingBelow && recentScore < failingBelow;
 			const sharpDecline = change <= -10 && latest.percent < strong;
-			if (belowPassing || sharpDecline || persistent.length >= 2) status = "needs-attention";
+			if (failing || sharpDecline || persistent.length >= 2) status = "needs-attention";
 			else if (latest.percent >= strong && (group.previous?.percent ?? 0) >= strong && persistent.length === 0) status = "performing-well";
 			else status = "room-to-improve";
 
 			if (group.trend.kind === "change" && Math.abs(change) >= 5) {
 				reasons.push(`Recent score ${describeChange(group.trend, "increased", "decreased")}`);
 			}
-			if (latest.percent < passing) reasons.push(`Latest score is below the passing grade of ${passing}%`);
+			if (latest.percent < failingBelow) reasons.push("Latest score is an F");
 			const [worst] = persistent;
 			if (worst) reasons.push(`"${worst.title || "Untitled question"}" missed in ${plural(worst.missedAttempts + worst.partialAttempts, "attempt")}`);
 			if (persistent.length > 1) reasons.push(`${plural(persistent.length, "question")} missed more than once`);

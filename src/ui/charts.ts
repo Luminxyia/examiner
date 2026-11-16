@@ -1,5 +1,6 @@
 import { setTooltip } from "obsidian";
 import { easeOutCubic, linePath, sampleSeries } from "../core/curve";
+import { gradeLines, type GradeBoundaries } from "../core/grades";
 import { addLocalDays, formatDuration, localDayKey, startOfLocalDay, type NumberedAttempt } from "../core/statistics";
 import { formatDateTime, formatMarks, formatPercent, formatScore, type Tone } from "./shared";
 
@@ -52,7 +53,7 @@ export function gradePoints(history: readonly NumberedAttempt[]): GradePoint[] {
 	}));
 }
 
-const CHART = { width: 560, height: 240, top: 12, right: 16, bottom: 34, left: 40 };
+const CHART = { width: 560, height: 240, top: 12, right: 32, bottom: 34, left: 40 };
 const PLOT_WIDTH = CHART.width - CHART.left - CHART.right;
 const PLOT_HEIGHT = CHART.height - CHART.top - CHART.bottom;
 const BASELINE = CHART.top + PLOT_HEIGHT;
@@ -65,16 +66,15 @@ const chartX = (index: number, count: number) => CHART.left + (count === 1 ? PLO
 
 export class GradeChart {
 	private readonly chart: SVGSVGElement;
-	private readonly area: SVGPathElement;
-	private readonly aboveArea: SVGPathElement;
-	private readonly belowArea: SVGPathElement;
-	private readonly aboveClip: SVGRectElement;
-	private readonly belowClip: SVGRectElement;
+	private readonly highArea: SVGPathElement;
+	private readonly middleArea: SVGPathElement;
+	private readonly lowArea: SVGPathElement;
+	private readonly highClip: SVGRectElement;
+	private readonly middleClip: SVGRectElement;
+	private readonly lowClip: SVGRectElement;
 	private readonly line: SVGPathElement;
 	private readonly labels: SVGGElement;
-	private readonly passing: SVGGElement;
-	private readonly passingLine: SVGLineElement;
-	private readonly passingLabel: SVGTextElement;
+	private readonly gradeGroup: SVGGElement;
 	private readonly markers: SVGGElement;
 	private shown: number[] = [];
 	private frame = 0;
@@ -88,11 +88,12 @@ export class GradeChart {
 		this.chart = svg(figure, "svg", { viewBox: `0 0 ${CHART.width} ${CHART.height}`, role: "img" });
 		const id = `examiner-grade-${++chartCount}`;
 		const defs = svg(this.chart, "defs", {});
-		this.aboveClip = svg(svg(defs, "clipPath", { id: `${id}-above` }), "rect", { x: 0, y: 0, width: CHART.width, height: 0 });
-		this.belowClip = svg(svg(defs, "clipPath", { id: `${id}-below` }), "rect", { x: 0, y: 0, width: CHART.width, height: 0 });
-		this.area = svg(this.chart, "path", { class: "examiner-grade-area" });
-		this.aboveArea = svg(this.chart, "path", { class: "examiner-grade-area-above", "clip-path": `url(#${id}-above)` });
-		this.belowArea = svg(this.chart, "path", { class: "examiner-grade-area-below", "clip-path": `url(#${id}-below)` });
+		this.highClip = svg(svg(defs, "clipPath", { id: `${id}-high` }), "rect", { x: 0, y: 0, width: CHART.width, height: 0 });
+		this.middleClip = svg(svg(defs, "clipPath", { id: `${id}-middle` }), "rect", { x: 0, y: 0, width: CHART.width, height: 0 });
+		this.lowClip = svg(svg(defs, "clipPath", { id: `${id}-low` }), "rect", { x: 0, y: 0, width: CHART.width, height: 0 });
+		this.highArea = svg(this.chart, "path", { class: "examiner-grade-area-high", "clip-path": `url(#${id}-high)` });
+		this.middleArea = svg(this.chart, "path", { class: "examiner-grade-area-middle", "clip-path": `url(#${id}-middle)` });
+		this.lowArea = svg(this.chart, "path", { class: "examiner-grade-area-low", "clip-path": `url(#${id}-low)` });
 		for (const tick of [0, 25, 50, 75, 100]) {
 			svg(this.chart, "line", { class: "examiner-grade-grid", x1: CHART.left, x2: CHART.width - CHART.right, y1: chartY(tick), y2: chartY(tick) });
 			svg(this.chart, "text", { class: "examiner-grade-tick", x: CHART.left - 8, y: chartY(tick), "text-anchor": "end", "dominant-baseline": "middle" }).textContent =
@@ -100,9 +101,7 @@ export class GradeChart {
 		}
 		svg(this.chart, "text", { class: "examiner-grade-axis", x: CHART.left + PLOT_WIDTH / 2, y: CHART.height - 2, "text-anchor": "middle" }).textContent = "Attempt";
 		this.labels = svg(this.chart, "g", {});
-		this.passing = svg(this.chart, "g", { class: "examiner-grade-passing" });
-		this.passingLine = svg(this.passing, "line", { x1: CHART.left, x2: CHART.width - CHART.right });
-		this.passingLabel = svg(this.passing, "text", { x: CHART.width - CHART.right, "text-anchor": "end" });
+		this.gradeGroup = svg(this.chart, "g", { class: "examiner-grade-boundary" });
 		this.line = svg(this.chart, "path", { class: "examiner-grade-line" });
 		this.markers = svg(this.chart, "g", {});
 	}
@@ -121,20 +120,22 @@ export class GradeChart {
 		this.titleEl.setAttribute("title", title);
 	}
 
-	update(points: readonly GradePoint[], animate: boolean, passingPercent: number | null = null): void {
-
+	update(points: readonly GradePoint[], animate: boolean, boundaries: GradeBoundaries): void {
 		window.cancelAnimationFrame(this.frame);
-		this.passing.toggleClass("is-hidden", passingPercent === null);
-		const passingY = passingPercent === null ? null : chartY(passingPercent);
-		if (passingPercent !== null && passingY !== null) {
-			const y = passingY;
-			this.aboveClip.setAttribute("height", String(y));
-			this.belowClip.setAttribute("y", String(y));
-			this.belowClip.setAttribute("height", String(CHART.height - y));
-			this.passingLine.setAttribute("y1", String(y));
-			this.passingLine.setAttribute("y2", String(y));
-			this.passingLabel.setAttribute("y", String(passingPercent > 90 ? y + 13 : y - 5));
-			this.passingLabel.textContent = `Passing: ${passingPercent}%`;
+
+		const bY = chartY(boundaries.b);
+		const dY = chartY(boundaries.d);
+		this.highClip.setAttribute("height", String(bY));
+		this.middleClip.setAttribute("y", String(bY));
+		this.middleClip.setAttribute("height", String(dY - bY));
+		this.lowClip.setAttribute("y", String(dY));
+		this.lowClip.setAttribute("height", String(CHART.height - dY));
+
+		this.gradeGroup.empty();
+		for (const grade of gradeLines(boundaries)) {
+			const y = chartY(grade.percent);
+			svg(this.gradeGroup, "line", { x1: CHART.left, x2: CHART.width - CHART.right, y1: y, y2: y });
+			svg(this.gradeGroup, "text", { x: CHART.width - CHART.right + 6, y, "dominant-baseline": "middle" }).textContent = grade.letter;
 		}
 		const targets = points.map((point) => point.percent);
 		const previous = this.shown;
@@ -164,11 +165,11 @@ export class GradeChart {
 			const last = coordinates[coordinates.length - 1];
 			const hasCurve = first !== undefined && last !== undefined && coordinates.length > 1;
 			this.line.setAttribute("d", hasCurve ? curve : "");
-			const closeAt = (y: number) => (hasCurve ? `${curve} L${last.x},${y} L${first.x},${y} Z` : "");
-			this.area.setAttribute("d", passingY === null ? closeAt(BASELINE) : "");
-			const band = passingY === null ? "" : closeAt(passingY);
-			this.aboveArea.setAttribute("d", band);
-			this.belowArea.setAttribute("d", band);
+			let area = "";
+			if (hasCurve) area = `${curve} L${last.x},${BASELINE} L${first.x},${BASELINE} Z`;
+			this.highArea.setAttribute("d", area);
+			this.middleArea.setAttribute("d", area);
+			this.lowArea.setAttribute("d", area);
 			coordinates.forEach((point, index) => {
 				squares[index]?.setAttribute("x", String(point.x - size / 2));
 				squares[index]?.setAttribute("y", String(point.y - size / 2));

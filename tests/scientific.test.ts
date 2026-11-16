@@ -85,7 +85,7 @@ describe("scientific notation display", () => {
 	it("carries through to exam results", () => {
 		const question = basicAddition({ id: "q-sci", scientific: true });
 		const { items } = prepareExam(
-			{ id: "e", title: "Sci", tags: [], timeLimitMinutes: null, passingPercent: 40, questions: [{ questionId: "q-sci", count: 1 }] },
+			{ id: "e", title: "Sci", tags: [], timeLimitMinutes: null, questions: [{ questionId: "q-sci", count: 1 }] },
 			() => question,
 			seededRandom(1),
 		);

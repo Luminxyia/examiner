@@ -363,6 +363,10 @@ button.examiner-choice.is-selected .examiner-choice-key {
 	overflow-wrap: anywhere;
 }
 
+.examiner-choice-text p {
+	margin: 0;
+}
+
 .examiner-judgements {
 	display: flex;
 	flex-wrap: wrap;
@@ -594,6 +598,16 @@ button.examiner-judgement.is-active {
 	font-variant-numeric: tabular-nums;
 	line-height: 1;
 	letter-spacing: -0.02em;
+}
+
+.examiner-score-row {
+	display: flex;
+	align-items: baseline;
+	gap: var(--size-4-4);
+}
+
+.examiner-score-grade {
+	color: var(--text-muted);
 }
 
 .examiner-score-caption {
@@ -1619,12 +1633,6 @@ button.examiner-row-score:focus-visible,
 	font-variant-numeric: tabular-nums;
 }
 
-.examiner-grade-area {
-	fill: var(--interactive-accent);
-	fill-opacity: 0.14;
-	stroke: none;
-}
-
 .examiner-grade-line {
 	fill: none;
 	stroke: var(--interactive-accent);
@@ -1659,19 +1667,16 @@ button.examiner-row-score:focus-visible,
 	max-height: 14rem;
 }
 
-.examiner-grade-passing line {
+.examiner-grade-boundary line {
 	stroke: var(--text-muted);
+	stroke-opacity: 0.5;
 	stroke-width: 1;
 	stroke-dasharray: 5 4;
 }
 
-.examiner-grade-passing text {
+.examiner-grade-boundary text {
 	fill: var(--text-muted);
 	font-size: 11px;
-}
-
-.examiner-grade-passing.is-hidden {
-	display: none;
 }
 
 .examiner-row-result {
@@ -1768,13 +1773,19 @@ button.examiner-row-score:focus-visible,
 	outline-offset: 2px;
 }
 
-.examiner-grade-area-above {
+.examiner-grade-area-high {
 	fill: var(--color-green);
 	fill-opacity: 0.22;
 	stroke: none;
 }
 
-.examiner-grade-area-below {
+.examiner-grade-area-middle {
+	fill: var(--color-orange);
+	fill-opacity: 0.22;
+	stroke: none;
+}
+
+.examiner-grade-area-low {
 	fill: var(--color-red);
 	fill-opacity: 0.22;
 	stroke: none;

@@ -15,6 +15,7 @@ import {
 	type StudyOverview,
 } from "../core/statistics";
 import type ExaminerPlugin from "../main";
+import { gradeBoundaries } from "../settings";
 import { toAttemptSummary } from "../storage/results";
 import { GradeChart, gradePoints, renderStudyHeatmap } from "./charts";
 import {
@@ -185,15 +186,11 @@ export class OverviewView extends ItemView {
 		this.chosenExamId = examId;
 		this.gradePicker.setValue(examId);
 		this.chart.setTitle(this.examTitle(examId, history[history.length - 1]?.examTitle ?? ""));
-		this.chart.update(gradePoints(history), animate, this.passingPercent(examId));
+		this.chart.update(gradePoints(history), animate, gradeBoundaries(this.plugin.settings));
 	}
 
 	private examTitle(examId: string, recorded: string): string {
 		return this.plugin.exams.get(examId)?.title || recorded || "Untitled exam";
-	}
-
-	private passingPercent(examId: string): number | null {
-		return this.plugin.exams.get(examId)?.passingPercent ?? null;
 	}
 
 	private renderHistory(root: HTMLElement, groups: readonly ExamGroup[]): void {

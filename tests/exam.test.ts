@@ -1,14 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
-	DEFAULT_PASSING_PERCENT,
 	formatTimeLimit,
-	isValidPassingPercent,
-	LEGACY_PASSING_PERCENT,
 	markExam,
 	parseTimeLimit,
 	prepareExam,
 	summariseExam,
-	validateExam,
 	type CalculationItem,
 	type ExamDefinition,
 } from "../src/core/exam";
@@ -31,7 +27,6 @@ const exam: ExamDefinition = {
 	title: "Mock",
 	tags: [],
 	timeLimitMinutes: 30,
-	passingPercent: 50,
 	questions: [
 		{ questionId: "q-add", count: 2 },
 		{ questionId: "q-pyth", count: 1 },
@@ -116,23 +111,6 @@ describe("marking and scoring", () => {
 			seededRandom(3),
 		);
 		expect(summariseExam(markExam(untagged.items, [""])).byTag).toEqual([{ label: "Untagged", correct: 0, total: 1 }]);
-	});
-});
-
-describe("passing grade validation", () => {
-	it("defaults new exams to 40% and keeps 50% for older files without a value", () => {
-		expect(DEFAULT_PASSING_PERCENT).toBe(40);
-		expect(LEGACY_PASSING_PERCENT).toBe(50);
-	});
-
-	it.each([0, 1, 50, 100])("accepts %d", (value) => {
-		expect(isValidPassingPercent(value)).toBe(true);
-		expect(validateExam({ ...exam, passingPercent: value }).some((issue) => issue.path === "passingPercent")).toBe(false);
-	});
-
-	it.each([-1, 101, 49.5, Number.NaN])("rejects %d", (value) => {
-		expect(isValidPassingPercent(value)).toBe(false);
-		expect(validateExam({ ...exam, passingPercent: value }).map((issue) => issue.path)).toContain("passingPercent");
 	});
 });
 

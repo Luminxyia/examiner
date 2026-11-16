@@ -29,8 +29,8 @@ function scored(id: string, examId: string, days: number, correct: number, total
 	return attemptOf(id, examId, days, outcomes.map(([questionId, outcome]) => item(questionId, outcome, ["topic"])));
 }
 
-function priorities(records: InsightAttempt[], passing = 40) {
-	return studyPriorities(groupAttemptsByExam(records.map(summary)), records, () => passing, NOW);
+function priorities(records: InsightAttempt[], failingBelow = 40) {
+	return studyPriorities(groupAttemptsByExam(records.map(summary)), records, failingBelow, NOW);
 }
 
 describe("study priorities", () => {
@@ -67,12 +67,12 @@ describe("study priorities", () => {
 		expect(entry).toMatchObject({ questionsAnswered: 4, status: "not-enough-evidence", reasons: [] });
 	});
 
-	it("flags exams that stay below the passing grade", () => {
+	it("flags exams that stay at an F", () => {
 
 		const [entry] = priorities([scored("a", "maths", 10, 1), scored("b", "maths", 2, 1)]);
 		expect(entry?.status).toBe("needs-attention");
 		expect(entry?.action).toBe("review-mistakes");
-		expect(entry?.reasons).toContain("Latest score is below the passing grade of 40%");
+		expect(entry?.reasons).toContain("Latest score is an F");
 	});
 
 	it("explains a recent decline as a percentage of the previous score", () => {

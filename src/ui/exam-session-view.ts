@@ -6,6 +6,7 @@ import { parseNumberInput } from "../core/numbers";
 import { examHistory } from "../core/statistics";
 import type { StudyContext } from "../core/study-time";
 import type ExaminerPlugin from "../main";
+import { gradeBoundaries } from "../settings";
 import { createId } from "../storage/format-shared";
 import { toAttemptSummary, type ExamMarking, type ExamResultRecord, type ExamSession } from "../storage/results";
 import { OUTCOME_LABELS, renderExamResult } from "./exam-results";
@@ -302,7 +303,8 @@ export class ExamSessionView extends ItemView {
 			});
 			button.toggleClass("is-selected", isSelected);
 			button.createSpan({ cls: "examiner-choice-key", text: String.fromCharCode(65 + (optionIndex % 26)) });
-			button.createSpan({ cls: "examiner-choice-text", text: option });
+			const optionText = button.createSpan({ cls: "examiner-choice-text" });
+			void renderMarkdown(this.app, optionText, option, this);
 			if (optionIndex === (selected ?? 0)) button.dataset.autofocus = "";
 			button.addEventListener("click", () => {
 				session.responses[index] = String(optionIndex);
@@ -542,6 +544,7 @@ export class ExamSessionView extends ItemView {
 			backLabel: "Back to exams",
 			onBack: () => void this.plugin.openExams(),
 			imageAccess: this.plugin.questionImageAccess,
+			gradeBoundaries: gradeBoundaries(this.plugin.settings),
 		});
 	}
 }

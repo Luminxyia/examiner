@@ -89,7 +89,6 @@ describe("exam record attachments", () => {
 		title: "With sheet",
 		tags: [],
 		timeLimitMinutes: null,
-		passingPercent: 40,
 		questions: [{ questionId: "q-1", count: 1 }],
 		attachments: ["Formula sheet.pdf", "circuit.png"],
 	};

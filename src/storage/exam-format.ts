@@ -1,7 +1,5 @@
 import {
-	LEGACY_PASSING_PERCENT,
 	formatTimeLimit,
-	isValidPassingPercent,
 	parseTimeLimit,
 	type ExamDefinition,
 	type ExamQuestionRef,
@@ -21,15 +19,6 @@ export function parseExamRecord(id: string, value: unknown): ParseResult<ExamDef
 		errors.push(`"timeLimit" must be a duration such as 30min or 1hr, or none.`);
 	}
 
-	const rawPassing = fields.passingGrade;
-	const passingPercent =
-		rawPassing === undefined || rawPassing === null
-			? LEGACY_PASSING_PERCENT
-			: readNumber(typeof rawPassing === "string" ? rawPassing.replace(/%\s*$/, "") : rawPassing);
-	if (passingPercent === undefined || !isValidPassingPercent(passingPercent)) {
-		errors.push(`"passingGrade" must be a whole number from 0 to 100.`);
-	}
-
 	const questions = readQuestionRefs(fields.questions, errors);
 	const tags = readStringList(fields.tags, "tags", errors);
 	const attachments = readFileNames(fields.attachments, "attachments", errors);
@@ -47,7 +36,6 @@ export function parseExamRecord(id: string, value: unknown): ParseResult<ExamDef
 			title: readString(fields.title) ?? "",
 			tags: normaliseTags(tags),
 			timeLimitMinutes: timeLimitMinutes ?? null,
-			passingPercent: passingPercent ?? LEGACY_PASSING_PERCENT,
 			questions,
 			...(attachments.length > 0 ? { attachments } : {}),
 			...(formulaSheet !== "" ? { formulaSheet } : {}),
@@ -61,7 +49,6 @@ export function examRecord(exam: ExamDefinition): Record<string, unknown> {
 		title: exam.title,
 		tags: exam.tags,
 		timeLimit: exam.timeLimitMinutes === null ? "none" : formatTimeLimit(exam.timeLimitMinutes),
-		passingGrade: exam.passingPercent,
 		questions: exam.questions.map((ref) => ({ id: ref.questionId, count: ref.count })),
 	};
 	if (exam.attachments && exam.attachments.length > 0) {
