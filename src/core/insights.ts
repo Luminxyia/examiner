@@ -262,43 +262,7 @@ export function studyPriorities(
 	return priorities.sort((a, b) => STATUS_ORDER[a.status] - STATUS_ORDER[b.status] || a.recentScore - b.recentScore || a.title.localeCompare(b.title));
 }
 
-export interface TargetCandidate {
-	id: string;
-	tags: readonly string[];
-	title: string;
-}
-
-export interface TargetedSelection {
-	questionIds: string[];
-	fromMistakes: number;
-	fromTopics: number;
-	topics: string[];
-}
-
-export const TARGETED_EXAM_SIZE = 10;
-
-export function selectTargetedQuestions(
-	mistakes: readonly MistakeEntry[],
-	candidates: readonly TargetCandidate[],
-	size = TARGETED_EXAM_SIZE,
-): TargetedSelection {
-	const available = new Map(candidates.map((candidate) => [candidate.id, candidate]));
-	const ranked = [...mistakes].sort((a, b) => Number(a.correctSinceLastMiss) - Number(b.correctSinceLastMiss) || b.priority - a.priority);
-	const chosen = ranked.filter((mistake) => available.has(mistake.questionId)).slice(0, size);
-	const questionIds = chosen.map((mistake) => mistake.questionId);
-	const topics = aggregateTopics(chosen).map((topic) => topic.tag);
-	const topicKeys = new Set(topics.map((topic) => topic.toLowerCase()));
-	const related = candidates
-		.filter((candidate) => !questionIds.includes(candidate.id))
-		.map((candidate) => ({ candidate, shared: candidate.tags.filter((tag) => topicKeys.has(tag.toLowerCase())).length }))
-		.filter((entry) => entry.shared > 0)
-		.sort((a, b) => b.shared - a.shared || a.candidate.title.localeCompare(b.candidate.title))
-		.slice(0, Math.max(0, size - questionIds.length))
-		.map((entry) => entry.candidate.id);
-	return { questionIds: [...questionIds, ...related], fromMistakes: questionIds.length, fromTopics: related.length, topics };
-}
-
-export type RecommendedAction = "review-mistakes" | "retry-exam" | "create-exam" | "open-exams" | "new-exam";
+export type RecommendedAction = "review-mistakes" | "retry-exam" | "open-exams" | "new-exam";
 
 export interface Recommendation {
 	heading: string;
@@ -337,7 +301,7 @@ export function recommendNext(priorities: readonly ExamPriority[], mistakes: rea
 		return {
 			heading: "Revisit the questions you keep missing",
 			detail: `${repeated.length === 1 ? "1 question was" : `${repeated.length} questions were`} answered incorrectly in more than one attempt.`,
-			actions: ["review-mistakes", "create-exam"],
+			actions: ["review-mistakes"],
 			examId: null,
 			mistakes: repeated,
 		};
@@ -360,14 +324,14 @@ export function recommendNext(priorities: readonly ExamPriority[], mistakes: rea
 			? {
 					heading: "Keep the improvement going",
 					detail: `Your latest score on ${improving.title || "an exam"} ${describeChange(improving.trend, "rose", "fell")}, but ${count} still ${unresolved.length === 1 ? "needs" : "need"} work.`,
-					actions: ["create-exam"],
+					actions: ["review-mistakes"],
 					examId: null,
 					mistakes: unresolved,
 				}
 			: {
 					heading: "Practice what you got wrong",
 					detail: `${count} answered incorrectly ${unresolved.length === 1 ? "hasn't" : "haven't"} been answered correctly since.`,
-					actions: ["create-exam", "review-mistakes"],
+					actions: ["review-mistakes"],
 					examId: null,
 					mistakes: unresolved,
 				};

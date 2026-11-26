@@ -19,7 +19,6 @@ export const VIEW_TYPE_EXAM_EDITOR = "examiner-exam-editor";
 
 export interface ExamEditorState {
 	examId?: string;
-	draft?: boolean;
 }
 
 const ALL_TAGS = "";
@@ -71,15 +70,8 @@ export class ExamEditorView extends ItemView {
 	}
 
 	override async setState(state: unknown, result: ViewStateResult): Promise<void> {
-		const { examId = null, draft = false } = (state as ExamEditorState | null) ?? {};
-		const pendingDraft = draft ? this.plugin.pendingExamDraft : null;
-		if (pendingDraft && this.plugin.ready) {
-			this.plugin.pendingExamDraft = null;
-			if (await this.confirmDiscard()) {
-				await this.discardUploads();
-				this.loadDraft(pendingDraft);
-			}
-		} else if (!this.plugin.ready) {
+		const { examId = null } = (state as ExamEditorState | null) ?? {};
+		if (!this.plugin.ready) {
 			this.requestedId = examId;
 		} else if (examId !== (this.isNew ? null : this.exam.id) || (examId === null && !this.isDirty())) {
 			await this.openExam(examId);
@@ -143,15 +135,6 @@ export class ExamEditorView extends ItemView {
 		}
 		await this.discardUploads();
 		this.loadExam(examId);
-		this.render();
-	}
-
-	private loadDraft(draft: ExamDefinition): void {
-		this.isNew = true;
-		this.exam = structuredClone(draft);
-		this.baseline = JSON.stringify({ ...blankExam(), id: draft.id });
-		this.tagFilter = ALL_TAGS;
-		this.search = "";
 		this.render();
 	}
 

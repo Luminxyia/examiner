@@ -1,4 +1,4 @@
-import { setIcon } from "obsidian";
+import { finishRenderMath, renderMath, setIcon } from "obsidian";
 import {
 	findJunctions,
 	parseDiagram,
@@ -13,6 +13,7 @@ import {
 	type ShapeLabel,
 } from "../core/diagram";
 import { CONNECTED_SYMBOLS, NAMED_SYMBOLS, PLACED_SYMBOLS, type LocalPoint, type SymbolPart, type SymbolStroke } from "../core/diagram-symbols";
+import { findMathRanges } from "../core/template";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 const TARGET_WIDTH = 440;
@@ -93,7 +94,39 @@ interface TextLayout {
 	box: Box;
 }
 
+interface PreparedLabel {
+	width: number;
+	height: number;
+	math: HTMLElement | null;
+}
+
 let diagramCount = 0;
+
+function createMathLabel(text: string): HTMLElement {
+	const label = createSpan({ cls: "examiner-diagram-math" });
+	let position = 0;
+	for (const range of findMathRanges(text)) {
+		label.appendText(text.slice(position, range.from));
+		label.appendChild(renderMath(range.source, false));
+		position = range.to;
+	}
+	label.appendText(text.slice(position));
+	return label;
+}
+
+function prepareLabel(text: string): PreparedLabel {
+	if (findMathRanges(text).length === 0) {
+		return { width: text.length * FONT_SIZE * 0.6, height: FONT_SIZE, math: null };
+	}
+	const math = createMathLabel(text);
+	const host = activeDocument.body.createDiv({ cls: "examiner-diagram-measure" });
+	host.appendChild(math);
+	const size = math.getBoundingClientRect();
+	host.remove();
+	const width = Math.ceil(size.width) + 1;
+	const height = Math.max(FONT_SIZE, Math.ceil(size.height));
+	return { width, height, math };
+}
 
 export function renderDiagram(container: HTMLElement, source: string): void {
 	container.empty();
@@ -503,16 +536,15 @@ class Drawing {
 		});
 	}
 
-	private layoutText(spot: LabelSpot, text: string, fontSize: number): TextLayout {
-		const width = text.length * fontSize * 0.6;
+	private layoutText(spot: LabelSpot, width: number, height: number): TextLayout {
 		const anchor = spot.anchor;
 		let x = anchor.x;
 		let y = anchor.y;
 		let textAnchor = "middle";
 		if (spot.placement === "above") {
-			y = anchor.y - LABEL_GAP - fontSize / 2;
+			y = anchor.y - LABEL_GAP - height / 2;
 		} else if (spot.placement === "below") {
-			y = anchor.y + LABEL_GAP + fontSize / 2;
+			y = anchor.y + LABEL_GAP + height / 2;
 		} else if (spot.placement === "left") {
 			x = anchor.x - LABEL_GAP;
 			textAnchor = "end";
@@ -523,8 +555,20 @@ class Drawing {
 		let left = x - width / 2;
 		if (textAnchor === "end") left = x - width;
 		if (textAnchor === "start") left = x;
-		const box = { left, top: y - fontSize / 2, right: left + width, bottom: y + fontSize / 2 };
+		const box = { left, top: y - height / 2, right: left + width, bottom: y + height / 2 };
 		return { x, y, textAnchor, box };
+	}
+
+	private writeMath(box: Box, math: HTMLElement, line: number): void {
+		const element = svgElement(this.textLayer, "foreignObject", {
+			x: round(box.left),
+			y: round(box.top),
+			width: round(box.right - box.left),
+			height: round(box.bottom - box.top),
+			class: "examiner-diagram-math-label",
+			"data-line": line,
+		});
+		element.appendChild(math);
 	}
 
 	private writeText(x: number, y: number, textAnchor: string, text: string, fontSize: number, line: number): void {
@@ -554,13 +598,15 @@ class Drawing {
 
 	private placeLabels(): void {
 		const placed: Box[] = [];
+		let hasMath = false;
 		for (const request of this.labels) {
 			if (request.text === "") continue;
 			const first = request.spots[0];
 			if (first === undefined) continue;
-			let chosen = this.layoutText(first, request.text, FONT_SIZE);
+			const label = prepareLabel(request.text);
+			let chosen = this.layoutText(first, label.width, label.height);
 			for (const spot of request.spots) {
-				const layout = this.layoutText(spot, request.text, FONT_SIZE);
+				const layout = this.layoutText(spot, label.width, label.height);
 				if (this.spotIsClear(layout.box, placed)) {
 					chosen = layout;
 					break;
@@ -569,8 +615,14 @@ class Drawing {
 			placed.push(chosen.box);
 			this.include({ x: chosen.box.left, y: chosen.box.top });
 			this.include({ x: chosen.box.right, y: chosen.box.bottom });
-			this.writeText(chosen.x, chosen.y, chosen.textAnchor, request.text, FONT_SIZE, request.line);
+			if (label.math === null) {
+				this.writeText(chosen.x, chosen.y, chosen.textAnchor, request.text, FONT_SIZE, request.line);
+			} else {
+				this.writeMath(chosen.box, label.math, request.line);
+				hasMath = true;
+			}
 		}
+		if (hasMath) void finishRenderMath();
 	}
 
 	private drawFreeLabel(at: DiagramPoint, text: string, placement: Placement | null): void {

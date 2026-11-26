@@ -1,6 +1,5 @@
-import { ItemView, Notice, type WorkspaceLeaf } from "obsidian";
+import { ItemView, type WorkspaceLeaf } from "obsidian";
 import { groupAttemptsByExam } from "../core/statistics";
-import type { ExamDefinition } from "../core/exam";
 import { collectPrepAttempts, type UpcomingExam } from "../core/exam-prep";
 import {
 	aggregateMistakes,
@@ -8,18 +7,15 @@ import {
 	describeMisses,
 	isRepeated,
 	recommendNext,
-	selectTargetedQuestions,
 	studyPriorities,
 	type ExamPriority,
 	type MistakeEntry,
 	type PriorityStatus,
 	type Recommendation,
 	type RecommendedAction,
-	type TargetCandidate,
 } from "../core/insights";
 import type ExaminerPlugin from "../main";
 import { gradeBoundaries } from "../settings";
-import { createId } from "../storage/format-shared";
 import { toAttemptSummary, type ExamResultRecord, type PracticeAttemptRecord } from "../storage/results";
 import { renderExamBoard } from "./exam-board";
 import { MistakeReviewModal } from "./mistake-review-modal";
@@ -38,7 +34,6 @@ const STATUS_LABELS: Record<PriorityStatus, string> = {
 const ACTION_LABELS: Record<RecommendedAction, string> = {
 	"review-mistakes": "Review mistakes",
 	"retry-exam": "Retry exam",
-	"create-exam": "Create exam",
 	"open-exams": "Open exams",
 	"new-exam": "New exam",
 };
@@ -132,15 +127,10 @@ export class TutorView extends ItemView {
 			for (const topic of topics) line.createSpan({ cls: "examiner-tag", text: topic.tag });
 		}
 		const list = block.createDiv({ cls: "examiner-priorities" });
-		const candidates = this.targetCandidates();
-		for (const priority of priorities.slice(0, 6)) this.renderPriority(list, priority, candidates);
+		for (const priority of priorities.slice(0, 6)) this.renderPriority(list, priority);
 	}
 
-	private targetCandidates(): TargetCandidate[] {
-		return this.plugin.usableQuestions().map((question) => ({ id: question.id, tags: question.tags, title: question.title }));
-	}
-
-	private renderPriority(parent: HTMLElement, priority: ExamPriority, candidates: readonly TargetCandidate[]): void {
+	private renderPriority(parent: HTMLElement, priority: ExamPriority): void {
 		const item = parent.createDiv({ cls: "examiner-priority" });
 		const head = item.createDiv({ cls: "examiner-priority-head" });
 		head.createSpan({ cls: "examiner-row-title", text: priority.title || "Untitled exam" });
@@ -156,16 +146,7 @@ export class TutorView extends ItemView {
 		if (priority.action === "review-mistakes") {
 			textButton(buttons, "Review mistakes").addEventListener("click", () => this.reviewMistakes(unresolved));
 		}
-		const pair = buttons.createDiv({ cls: "examiner-priority-pair" });
-		const tailored = textButton(pair, "Create tailored exam");
-		const canTailor = selectTargetedQuestions(priority.mistakes, candidates).questionIds.length > 0;
-		tailored.disabled = !canTailor;
-		tailored.setAttribute(
-			"aria-label",
-			canTailor ? `Create an exam from the questions you got wrong in ${priority.title || "this exam"}` : "No questions you got wrong in this exam are available",
-		);
-		tailored.addEventListener("click", () => void this.createTargetedExam(priority.mistakes, priority.title));
-		const retry = textButton(pair, "Retry");
+		const retry = textButton(buttons, "Retry");
 
 		retry.disabled = !exam;
 		retry.setAttribute("aria-label", exam ? `Retry ${exam.title || "this exam"}` : "This exam has been deleted");
@@ -191,9 +172,6 @@ export class TutorView extends ItemView {
 					case "retry-exam":
 						if (exam) void startExam(this.plugin, exam);
 						break;
-					case "create-exam":
-						void this.createTargetedExam(recommendation.mistakes);
-						break;
 					case "open-exams":
 						void this.plugin.openExams();
 						break;
@@ -208,26 +186,6 @@ export class TutorView extends ItemView {
 	private reviewMistakes(mistakes: readonly MistakeEntry[]): void {
 
 		if (mistakes.length > 0) new MistakeReviewModal(this.plugin, mistakes, 0).open();
-	}
-
-	private async createTargetedExam(mistakes: readonly MistakeEntry[], focus?: string): Promise<void> {
-		const selection = selectTargetedQuestions(mistakes, this.targetCandidates());
-		if (selection.questionIds.length === 0) {
-			new Notice("None of the questions you got wrong are still available. Retake one of your exams instead.");
-			return;
-		}
-		const date = new Date().toLocaleDateString(undefined, { dateStyle: "medium" });
-		const draft: ExamDefinition = {
-			id: createId("e"),
-			title: focus ? `${focus}: targeted practice` : `Targeted practice (${date})`,
-			tags: [],
-			timeLimitMinutes: null,
-			questions: selection.questionIds.map((questionId) => ({ questionId, count: 1 })),
-		};
-		const parts = [`${selection.fromMistakes === 1 ? "1 question" : `${selection.fromMistakes} questions`} you got wrong`];
-		if (selection.fromTopics > 0) parts.push(`${selection.fromTopics} more on the same topics`);
-		new Notice(`Added ${parts.join(" and ")}. Review the exam, then save it to practice.`);
-		await this.plugin.editExamDraft(draft);
 	}
 
 	private renderMistakes(root: HTMLElement, mistakes: readonly MistakeEntry[]): void {

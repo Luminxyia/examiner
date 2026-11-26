@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ItemOutcome } from "../src/core/exam";
-import { aggregateMistakes, recommendNext, selectTargetedQuestions, studyPriorities, type InsightAttempt } from "../src/core/insights";
+import { aggregateMistakes, recommendNext, studyPriorities, type InsightAttempt } from "../src/core/insights";
 import { groupAttemptsByExam, type AttemptSummary } from "../src/core/statistics";
 import { attemptOf, item, NOW } from "./helpers";
 
@@ -113,43 +113,6 @@ describe("study priorities", () => {
 	});
 });
 
-describe("targeted exam selection", () => {
-	const records = [
-		attemptOf("a", "maths", 9, [item("log", "incorrect", ["logs"]), item("diff", "incorrect", ["calculus"]), item("gone", "incorrect", ["logs"])]),
-		attemptOf("b", "maths", 2, [item("log", "incorrect", ["logs"]), item("diff", "correct", ["calculus"])]),
-	];
-	const mistakes = aggregateMistakes(records, NOW);
-	const candidates = [
-		{ id: "log", tags: ["logs"], title: "Logs" },
-		{ id: "diff", tags: ["calculus"], title: "Diff" },
-		{ id: "log2", tags: ["logs"], title: "More logs" },
-		{ id: "trig", tags: ["trigonometry"], title: "Trig" },
-	];
-
-	it("starts with unresolved, high-priority mistakes that still exist", () => {
-		const selection = selectTargetedQuestions(mistakes, candidates);
-		expect(selection.questionIds.slice(0, 2)).toEqual(["log", "diff"]);
-		expect(selection.questionIds).not.toContain("gone");
-		expect(selection.fromMistakes).toBe(2);
-	});
-
-	it("tops up with other questions on the same topics, without unrelated ones or duplicates", () => {
-		const selection = selectTargetedQuestions(mistakes, candidates);
-		expect(selection.questionIds).toEqual(["log", "diff", "log2"]);
-		expect(selection.fromTopics).toBe(1);
-		expect(new Set(selection.questionIds).size).toBe(selection.questionIds.length);
-	});
-
-	it("respects the requested size", () => {
-		expect(selectTargetedQuestions(mistakes, candidates, 1).questionIds).toEqual(["log"]);
-	});
-
-	it("returns nothing when no mistake questions are available", () => {
-		expect(selectTargetedQuestions([], candidates)).toMatchObject({ questionIds: [], fromMistakes: 0, fromTopics: 0 });
-		expect(selectTargetedQuestions(mistakes, [{ id: "trig", tags: ["trigonometry"], title: "Trig" }]).questionIds).toEqual([]);
-	});
-});
-
 describe("continue studying", () => {
 	const recommend = (records: InsightAttempt[], hasExams = true) =>
 		recommendNext(priorities(records), aggregateMistakes(records, NOW), hasExams);
@@ -167,18 +130,19 @@ describe("continue studying", () => {
 
 	it("focuses on questions missed in more than one attempt", () => {
 		const result = recommend([scored("a", "elec", 12, 9, 10, ["cap"]), scored("b", "elec", 4, 9, 10, ["cap"])]);
-		expect(result).toMatchObject({ heading: "Revisit the questions you keep missing", actions: ["review-mistakes", "create-exam"] });
+		expect(result).toMatchObject({ heading: "Revisit the questions you keep missing", actions: ["review-mistakes"] });
 		expect(result?.mistakes.map((mistake) => mistake.questionId)).toEqual(["cap"]);
 	});
 
-	it("suggests targeted practice for one-off mistakes", () => {
+	it("suggests reviewing one-off mistakes", () => {
 		const result = recommend([scored("a", "elec", 12, 9, 10, ["cap"]), scored("b", "elec", 4, 9, 10, ["res"])]);
-		expect(result).toMatchObject({ heading: "Practice what you got wrong", actions: ["create-exam", "review-mistakes"] });
+		expect(result).toMatchObject({ heading: "Practice what you got wrong", actions: ["review-mistakes"] });
 	});
 
 	it("acknowledges improvement while pointing at what is left", () => {
 		const result = recommend([scored("a", "phys", 12, 7, 10, ["a", "b", "c"]), scored("b", "phys", 4, 9, 10, ["d"])]);
 		expect(result?.heading).toBe("Keep the improvement going");
+		expect(result?.actions).toEqual(["review-mistakes"]);
 		expect(result?.detail).toContain("rose (+29%)");
 	});
 

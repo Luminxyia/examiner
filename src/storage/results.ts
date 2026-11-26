@@ -183,6 +183,15 @@ export class ResultsStore {
 		return `${this.folder}/upcoming-exams.json`;
 	}
 
+	isResultsLog(path: string): boolean {
+		return path === this.practicePath || path === this.examPath;
+	}
+
+	reloadResults(): void {
+		this.examResults = null;
+		this.notify();
+	}
+
 	async recordPracticeAttempt(record: PracticeAttemptRecord): Promise<void> {
 		await this.appendLine(this.practicePath, record);
 		this.notify();

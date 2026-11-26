@@ -1978,14 +1978,10 @@ button.examiner-show-more {
 	margin-top: var(--size-2-1);
 }
 
-.examiner-priority-buttons,
-.examiner-priority-pair {
-	display: flex;
-	gap: var(--size-2-3);
-}
-
 .examiner-priority-buttons {
+	display: flex;
 	flex-wrap: wrap;
+	gap: var(--size-2-3);
 }
 
 .examiner-next-step {
@@ -2208,6 +2204,27 @@ button.examiner-show-more {
 
 .examiner-question .examiner-diagram-label {
 	stroke: var(--background-primary-alt);
+}
+
+.examiner-diagram-math-label {
+	overflow: visible;
+}
+
+.examiner-diagram-math {
+	display: inline-block;
+	font-family: var(--font-interface);
+	font-size: 14px;
+	line-height: 1.2;
+	white-space: nowrap;
+	color: var(--text-normal);
+}
+
+.examiner-diagram-measure {
+	position: fixed;
+	top: 0;
+	left: -10000px;
+	visibility: hidden;
+	pointer-events: none;
 }
 
 .examiner-diagram-editable {

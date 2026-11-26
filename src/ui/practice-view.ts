@@ -1,5 +1,5 @@
 import { ItemView, Notice, type ViewStateResult, type WorkspaceLeaf } from "obsidian";
-import { answerInstruction, checkAnswer, formatExpectedAnswer, type AnswerCheck } from "../core/answer";
+import { answerInstruction, checkAnswer, formatExpectedAnswer, isNearMiss, type AnswerCheck } from "../core/answer";
 import { hasErrors, validateDefinition, type QuestionDefinition } from "../core/definition";
 import { attemptText } from "../core/exam";
 import { drawFlashcard, expectedFlashcardAnswer, type FlashcardCard, type Judgement } from "../core/flashcard";
@@ -33,7 +33,7 @@ export interface PracticeViewState {
 interface Submission {
 	response: string;
 	check: AnswerCheck;
-	revealed: boolean;
+	nearMiss: boolean;
 }
 
 interface FlashcardAttempt {
@@ -252,10 +252,12 @@ export class PracticeView extends ItemView {
 				return;
 			}
 			const check = checkAnswer(question.answer, instance.answer, parsed.value);
-			this.submission = { response: input.value.trim(), check, revealed: check.correct };
+			const nearMiss = isNearMiss(question.answer, instance.answer, parsed.value);
+			const submission: Submission = { response: input.value.trim(), check, nearMiss };
+			this.submission = submission;
 			this.tally.total++;
 			if (check.correct) this.tally.correct++;
-			void this.record(question, instance, this.submission);
+			void this.record(question, instance, submission);
 			void this.render();
 		});
 		input.addEventListener("input", () => {
@@ -284,41 +286,33 @@ export class PracticeView extends ItemView {
 			cls: `examiner-feedback-status examiner-tone-${correct ? "success" : "error"}`,
 			text: correct ? "Correct" : "Incorrect",
 		});
-		if (submission.check.hint) feedback.createDiv({ cls: "examiner-small", text: submission.check.hint });
+		if (submission.check.hint) {
+			feedback.createDiv({ cls: "examiner-small", text: submission.check.hint });
+		} else if (!correct && submission.nearMiss) {
+			feedback.createDiv({ cls: "examiner-small", text: "Close to the expected answer." });
+		}
 
 		const expected = formatExpectedAnswer(question.answer, instance.answer, question.scientific);
-		if (submission.revealed) renderAnswerComparison(feedback, submission.response, expected);
+		renderAnswerComparison(feedback, submission.response, expected);
 		renderYourWorkings(feedback, this.working.trim());
-		if (submission.revealed) renderWorking(feedback, workedSteps(instance), !correct);
+		renderWorking(feedback, workedSteps(instance), !correct);
 
 		const actions = parent.createDiv({ cls: "examiner-feedback-actions" });
-		if (submission.revealed) {
-			const text = attemptText({
-				prompt: instance.prompt,
-				response: submission.response,
-				outcome: correct ? "correct" : "incorrect",
-				expectedDisplay: expected,
-				...this.savedWorking(),
-				inputs: instance.inputs,
-				steps: instance.steps,
-			});
-			textButton(actions, "Copy").addEventListener("click", () => void copyText(text));
-		}
-		if (!submission.check.correct) {
-			const retry = textButton(actions, "Try again");
-			retry.addEventListener("click", () => {
-				this.submission = null;
-				void this.render();
-			});
-			if (!submission.revealed) {
-				const reveal = textButton(actions, "Show answer");
-				reveal.addEventListener("click", () => {
-					submission.revealed = true;
-					void this.render();
-				});
-			}
-		}
-		const next = textButton(actions, "New variation", true);
+		const text = attemptText({
+			prompt: instance.prompt,
+			response: submission.response,
+			outcome: correct ? "correct" : "incorrect",
+			expectedDisplay: expected,
+			...this.savedWorking(),
+			inputs: instance.inputs,
+			steps: instance.steps,
+		});
+		textButton(actions, "Copy").addEventListener("click", () => void copyText(text));
+		this.renderNextActions(actions, "New variation");
+	}
+
+	private renderNextActions(actions: HTMLElement, nextLabel: string): void {
+		const next = textButton(actions, nextLabel, true);
 		next.dataset.autofocus = "";
 		next.addEventListener("click", () => this.newVariation());
 	}
@@ -387,15 +381,7 @@ export class PracticeView extends ItemView {
 			steps: [],
 		});
 		textButton(actions, "Copy").addEventListener("click", () => void copyText(text));
-		if (attempt.outcome !== "correct" && card.mode === "choice") {
-			textButton(actions, "Try again").addEventListener("click", () => {
-				this.attempt = null;
-				void this.render();
-			});
-		}
-		const again = textButton(actions, "Practice again", true);
-		again.dataset.autofocus = "";
-		again.addEventListener("click", () => this.newVariation());
+		this.renderNextActions(actions, "Practice again");
 	}
 
 	private judgeFlashcard(question: QuestionDefinition, card: FlashcardCard, response: string, outcome: Judgement): void {

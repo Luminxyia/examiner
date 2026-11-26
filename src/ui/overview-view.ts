@@ -71,6 +71,8 @@ export class OverviewView extends ItemView {
 		this.contentEl.addClass("examiner-view", "examiner-overview");
 		this.register(this.plugin.results.onChange(() => void this.render()));
 		this.register(this.plugin.exams.onChange(() => void this.render()));
+		this.register(this.plugin.questions.onChange(() => void this.render()));
+		this.register(this.plugin.loadState.onChange(() => void this.render()));
 		this.registerInterval(window.setInterval(() => this.updateTimerButton(), 1000));
 		await this.render();
 	}

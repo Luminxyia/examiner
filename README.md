@@ -44,7 +44,7 @@ Because I actively use this plugin for my studies, this plugin will be actively 
 	- Create custom exams out of your questions, pick how many questions you want.
 - Study overview
 	- See your exam history and grades overtime
-	- Get feedback and next steps, as well as tailored exams for the problems you keep getting wrong.
+	- Get feedback and next steps.
 
 # Quick start
 

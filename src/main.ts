@@ -44,7 +44,6 @@ export default class ExaminerPlugin extends Plugin {
 	studyTimerStartedAt: number | null = null;
 	readonly loadState = new LoadState();
 	unsavedDraft: EditorDraft | null = null;
-	pendingExamDraft: ExamDefinition | null = null;
 
 	override async onload(): Promise<void> {
 		await this.loadSettings();
@@ -73,6 +72,9 @@ export default class ExaminerPlugin extends Plugin {
 		this.questionImages = new AttachmentStore(adapter, `${dataFolder}/question-images`);
 		this.vaultFiles = new VaultFiles(this.app, () => this.settings.reuseFolder);
 		this.registerEvent(this.app.vault.on("rename", (file, oldPath) => void this.followRename(oldPath, file.path)));
+		this.registerEvent(this.app.vault.on("modify", (file) => this.reloadResultsLog(file.path)));
+		this.registerEvent(this.app.vault.on("create", (file) => this.reloadResultsLog(file.path)));
+		this.registerEvent(this.app.vault.on("delete", (file) => this.reloadResultsLog(file.path)));
 
 		this.registerView(VIEW_TYPE_QUESTION_EDITOR, (leaf) => new QuestionEditorView(leaf, this));
 		this.registerView(VIEW_TYPE_PRACTICE, (leaf) => new PracticeView(leaf, this));
@@ -136,6 +138,10 @@ export default class ExaminerPlugin extends Plugin {
 		await this.loadStudyTimer();
 		this.startStudyTracking();
 		this.app.workspace.onLayoutReady(() => void this.initialiseLibraries());
+	}
+
+	private reloadResultsLog(path: string): void {
+		if (this.results.isResultsLog(path)) this.results.reloadResults();
 	}
 
 	private addNoteDiagram(editor: Editor): void {
@@ -381,7 +387,6 @@ export default class ExaminerPlugin extends Plugin {
 		this.studyTimerStartedAt = null;
 		await this.pendingStudyWrite;
 		this.unsavedDraft = null;
-		this.pendingExamDraft = null;
 		const failed: string[] = [];
 		const steps: [string, () => Promise<void>][] = [
 			["exam results and study history", () => this.results.clearAll()],
@@ -424,12 +429,6 @@ export default class ExaminerPlugin extends Plugin {
 
 	async editExam(exam?: ExamDefinition): Promise<void> {
 		const state: ExamEditorState = exam ? { examId: exam.id } : {};
-		await this.openView({ type: VIEW_TYPE_EXAM_EDITOR, state: { ...state } });
-	}
-
-	async editExamDraft(draft: ExamDefinition): Promise<void> {
-		this.pendingExamDraft = draft;
-		const state: ExamEditorState = { draft: true };
 		await this.openView({ type: VIEW_TYPE_EXAM_EDITOR, state: { ...state } });
 	}
 

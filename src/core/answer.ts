@@ -43,6 +43,15 @@ export function checkAnswer(rule: AnswerRule, answer: number, response: number):
 	}
 }
 
+export const NEAR_MISS_FRACTION = 0.1;
+
+export function isNearMiss(rule: AnswerRule, answer: number, response: number): boolean {
+	const expected = expectedAnswer(rule, answer);
+	if (expected === 0) return false;
+	const difference = Math.abs(response - expected) / Math.abs(expected);
+	return difference <= NEAR_MISS_FRACTION + EXACT_RELATIVE_TOLERANCE;
+}
+
 function withinTolerance(response: number, answer: number, tolerance: number): boolean {
 
 	const margin = 1e-12 * Math.max(1, Math.abs(answer));
